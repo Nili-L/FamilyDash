@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Home, Users, Pill, Calendar, CheckSquare, Settings, Download, Upload, AlertCircle } from 'lucide-react';
 import DashboardOverview from './components/DashboardOverview';
-import FamilyManager from './components/FamilyManager';
 import MedicationTracker from './components/MedicationTracker';
-import AppointmentManager from './components/AppointmentManager';
 import TaskManager from './components/TaskManager';
+import FamilyPage from './pages/FamilyPage';
+import AppointmentsPage from './pages/AppointmentsPage';
 import { useFamilyData } from './hooks/useFamilyData';
 
 function App() {
@@ -42,6 +42,16 @@ function App() {
     importData,
     clearAllData
   } = useFamilyData();
+
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const status = urlParams.get('status');
+    if (status === 'success') {
+      alert('Google account connected successfully!');
+      // Clean up the URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
   
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
@@ -80,14 +90,7 @@ function App() {
           />
         );
       case 'family':
-        return (
-          <FamilyManager
-            familyMembers={familyMembers}
-            onAdd={addFamilyMember}
-            onUpdate={updateFamilyMember}
-            onDelete={deleteFamilyMember}
-          />
-        );
+        return <FamilyPage />;
       case 'medications':
         return (
           <MedicationTracker
@@ -100,15 +103,7 @@ function App() {
           />
         );
       case 'appointments':
-        return (
-          <AppointmentManager
-            appointments={appointments}
-            familyMembers={familyMembers}
-            onAdd={addAppointment}
-            onUpdate={updateAppointment}
-            onDelete={deleteAppointment}
-          />
-        );
+        return <AppointmentsPage />;
       case 'tasks':
         return (
           <TaskManager
