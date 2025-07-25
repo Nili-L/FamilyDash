@@ -66,13 +66,8 @@ const MedicationTracker = ({
     setIsFormOpen(true);
   };
   
-  const getMemberColor = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return member?.color || '#6b7280';
-  };
-  
   const getMemberName = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
+    const member = familyMembers.find(m => m.id === personId);
     return member?.name || 'Unknown';
   };
   
@@ -106,6 +101,28 @@ const MedicationTracker = ({
       options: timeSlots,
       error: errors.time,
       defaultValue: editingMedication?.time
+    },
+    {
+      name: 'recurrenceType',
+      label: 'Repeats',
+      type: 'select',
+      required: true,
+      options: [
+        { value: 'once', label: 'Once' },
+        { value: 'daily', label: 'Daily' },
+        { value: 'weekly', label: 'Weekly' },
+        { value: 'monthly', label: 'Monthly' },
+        { value: 'yearly', label: 'Yearly' },
+      ],
+      error: errors.recurrenceType,
+      defaultValue: editingMedication?.recurrenceType || 'once'
+    },
+    {
+      name: 'recurrenceDetails',
+      label: 'Recurrence Details (e.g., "Mon, Wed, Fri" or "15th of month")',
+      type: 'text',
+      placeholder: 'Optional details for recurrence',
+      defaultValue: editingMedication?.recurrenceDetails || ''
     },
     {
       name: 'notes',
@@ -225,6 +242,12 @@ const MedicationTracker = ({
                         <p className="text-sm text-gray-600">
                           For {getMemberName(medication.person)}
                         </p>
+                        {medication.recurrenceType && medication.recurrenceType !== 'once' && (
+                          <p className="text-xs text-gray-500 mt-1">
+                            Repeats: {medication.recurrenceType}
+                            {medication.recurrenceDetails && ` (${medication.recurrenceDetails})`}
+                          </p>
+                        )}
                       </div>
                       <button
                         onClick={() => onToggleTaken(medication.id)}

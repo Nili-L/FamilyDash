@@ -2,7 +2,6 @@ import { useLocalStorage } from './useLocalStorage';
 import { useState, useCallback, useEffect } from 'react';
 
 const STORAGE_KEYS = {
-  FAMILY_MEMBERS: 'familyDashboard_members',
   MEDICATIONS: 'familyDashboard_medications',
   APPOINTMENTS: 'familyDashboard_appointments',
   TASKS: 'familyDashboard_tasks',
@@ -10,7 +9,6 @@ const STORAGE_KEYS = {
 };
 
 export const useFamilyData = () => {
-  const [familyMembers, setFamilyMembers] = useLocalStorage(STORAGE_KEYS.FAMILY_MEMBERS, []);
   const [medications, setMedications] = useLocalStorage(STORAGE_KEYS.MEDICATIONS, []);
   const [appointments, setAppointments] = useLocalStorage(STORAGE_KEYS.APPOINTMENTS, []);
   const [tasks, setTasks] = useLocalStorage(STORAGE_KEYS.TASKS, []);
@@ -24,46 +22,29 @@ export const useFamilyData = () => {
   
   useEffect(() => {
     const maxId = Math.max(
-      ...familyMembers.map(m => m.id || 0),
-      ...medications.map(m => m.id || 0),
-      ...appointments.map(a => a.id || 0),
-      ...tasks.map(t => t.id || 0),
+      ...medications.map(m => parseInt(m.id) || 0),
+      ...appointments.map(a => parseInt(a.id) || 0),
+      ...tasks.map(t => parseInt(t.id) || 0),
       0
     );
     setNextId(maxId + 1);
-  }, [familyMembers, medications, appointments, tasks]);
+  }, [medications, appointments, tasks]);
   
   const getNextId = useCallback(() => {
-    const id = nextId;
+    const id = nextId.toString(); // Ensure ID is a string
     setNextId(prev => prev + 1);
     return id;
   }, [nextId]);
-  
-  const addFamilyMember = useCallback((member) => {
-    const newMember = { ...member, id: getNextId() };
-    setFamilyMembers(prev => [...prev, newMember]);
-    return newMember;
-  }, [getNextId, setFamilyMembers]);
-  
-  const updateFamilyMember = useCallback((id, updates) => {
-    setFamilyMembers(prev => 
-      prev.map(member => member.id === id ? { ...member, ...updates } : member)
-    );
-  }, [setFamilyMembers]);
-  
-  const deleteFamilyMember = useCallback((id) => {
-    setFamilyMembers(prev => prev.filter(member => member.id !== id));
-    setMedications(prev => prev.filter(med => med.person !== id));
-    setAppointments(prev => prev.filter(apt => apt.person !== id));
-    setTasks(prev => prev.filter(task => task.person !== id));
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks]);
   
   const addMedication = useCallback((medication) => {
     const newMedication = { 
       ...medication, 
       id: getNextId(),
+      person: String(medication.person), // Ensure person ID is a string
       taken: false,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      recurrenceType: medication.recurrenceType || 'once',
+      recurrenceDetails: medication.recurrenceDetails || null,
     };
     setMedications(prev => [...prev, newMedication]);
     return newMedication;
@@ -93,6 +74,7 @@ export const useFamilyData = () => {
     const newAppointment = { 
       ...appointment, 
       id: getNextId(),
+      person: String(appointment.person), // Ensure person ID is a string
       createdAt: new Date().toISOString()
     };
     setAppointments(prev => [...prev, newAppointment]);
@@ -113,6 +95,7 @@ export const useFamilyData = () => {
     const newTask = { 
       ...task, 
       id: getNextId(),
+      person: String(task.person), // Ensure person ID is a string
       completed: false,
       createdAt: new Date().toISOString()
     };
@@ -142,7 +125,6 @@ export const useFamilyData = () => {
   
   const exportData = useCallback(() => {
     const data = {
-      familyMembers,
       medications,
       appointments,
       tasks,
@@ -158,7 +140,7 @@ export const useFamilyData = () => {
     a.download = `family-dashboard-backup-${new Date().toISOString().split('T')[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
-  }, [familyMembers, medications, appointments, tasks, settings]);
+  }, [medications, appointments, tasks, settings]);
   
   const importData = useCallback((file) => {
     return new Promise((resolve, reject) => {
@@ -167,7 +149,6 @@ export const useFamilyData = () => {
         try {
           const data = JSON.parse(e.target.result);
           
-          if (data.familyMembers) setFamilyMembers(data.familyMembers);
           if (data.medications) setMedications(data.medications);
           if (data.appointments) setAppointments(data.appointments);
           if (data.tasks) setTasks(data.tasks);
@@ -181,11 +162,10 @@ export const useFamilyData = () => {
       reader.onerror = () => reject({ success: false, message: 'Error reading file' });
       reader.readAsText(file);
     });
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks, setSettings]);
+  }, [setMedications, setAppointments, setTasks, setSettings]);
   
   const clearAllData = useCallback(() => {
     if (window.confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      setFamilyMembers([]);
       setMedications([]);
       setAppointments([]);
       setTasks([]);
@@ -195,18 +175,13 @@ export const useFamilyData = () => {
         language: 'en'
       });
     }
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks, setSettings]);
+  }, [setMedications, setAppointments, setTasks, setSettings]);
   
   return {
-    familyMembers,
     medications,
     appointments,
     tasks,
     settings,
-    
-    addFamilyMember,
-    updateFamilyMember,
-    deleteFamilyMember,
     
     addMedication,
     updateMedication,

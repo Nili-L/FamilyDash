@@ -11,17 +11,13 @@ function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showSettings, setShowSettings] = useState(false);
   const [importError, setImportError] = useState('');
-  
+  const [familyMembers, setFamilyMembers] = useState([]);
+
   const {
-    familyMembers,
     medications,
     appointments,
     tasks,
     settings,
-    
-    addFamilyMember,
-    updateFamilyMember,
-    deleteFamilyMember,
     
     addMedication,
     updateMedication,
@@ -52,6 +48,23 @@ function App() {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, []);
+
+  useEffect(() => {
+    fetchFamilyMembers();
+  }, []);
+
+  const fetchFamilyMembers = async () => {
+    try {
+      const response = await fetch('/api/family-members');
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      const data = await response.json();
+      setFamilyMembers(data);
+    } catch (error) {
+      console.error("Error fetching family members:", error);
+    }
+  };
   
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
