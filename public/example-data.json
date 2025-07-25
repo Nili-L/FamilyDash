@@ -1,0 +1,134 @@
+{
+  "familyMembers": [
+    {
+      "id": 1,
+      "name": "Sarah Johnson",
+      "color": "#3b82f6"
+    },
+    {
+      "id": 2,
+      "name": "Michael Johnson",
+      "color": "#10b981"
+    },
+    {
+      "id": 3,
+      "name": "Emma Johnson",
+      "color": "#ec4899"
+    }
+  ],
+  "medications": [
+    {
+      "id": 4,
+      "name": "Vitamin D",
+      "person": 3,
+      "time": "08:00",
+      "taken": false,
+      "notes": "With breakfast",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 5,
+      "name": "Melatonin",
+      "person": 3,
+      "time": "20:00",
+      "taken": false,
+      "notes": "30 minutes before bedtime",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 6,
+      "name": "Multivitamin",
+      "person": 1,
+      "time": "09:00",
+      "taken": false,
+      "notes": "With water",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    }
+  ],
+  "appointments": [
+    {
+      "id": 7,
+      "title": "Speech Therapy",
+      "person": 3,
+      "date": "2024-01-20",
+      "time": "14:00",
+      "location": "Children's Therapy Center, Room 205",
+      "notes": "Bring communication book",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 8,
+      "title": "Occupational Therapy",
+      "person": 3,
+      "date": "2024-01-22",
+      "time": "10:00",
+      "location": "Children's Therapy Center, Room 102",
+      "notes": "Sensory evaluation scheduled",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 9,
+      "title": "Parent Support Group",
+      "person": 1,
+      "date": "2024-01-25",
+      "time": "18:30",
+      "location": "Community Center, Meeting Room A",
+      "notes": "Monthly meeting",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    }
+  ],
+  "tasks": [
+    {
+      "id": 10,
+      "task": "Complete sensory brushing routine",
+      "person": 3,
+      "priority": "high",
+      "completed": false,
+      "notes": "Every 2 hours during waking hours",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 11,
+      "task": "Practice speech exercises",
+      "person": 3,
+      "priority": "high",
+      "completed": false,
+      "notes": "15 minutes, use picture cards",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 12,
+      "task": "Prepare visual schedule for tomorrow",
+      "person": 2,
+      "priority": "medium",
+      "completed": false,
+      "notes": "Include all therapy appointments",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 13,
+      "task": "Call insurance about therapy coverage",
+      "person": 1,
+      "priority": "high",
+      "completed": false,
+      "notes": "Reference number: #123456",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "id": 14,
+      "task": "Refill prescriptions",
+      "person": 2,
+      "priority": "medium",
+      "completed": false,
+      "notes": "Pharmacy closes at 6 PM",
+      "createdAt": "2024-01-15T10:00:00.000Z"
+    }
+  ],
+  "settings": {
+    "theme": "light",
+    "notifications": true,
+    "language": "en"
+  },
+  "exportedAt": "2024-01-15T10:00:00.000Z",
+  "version": "1.0.0"
+}
