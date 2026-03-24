@@ -1,101 +1,134 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
-const AppointmentsPage = () => {
-    const [familyMembers, setFamilyMembers] = useState([]);
-    const [selectedMemberId, setSelectedMemberId] = useState('');
-    const [events, setEvents] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDelete }) => {
+    const [showForm, setShowForm] = useState(false);
+    const [formData, setFormData] = useState({ title: '', person: '', date: '', time: '', location: '', notes: '' });
 
-    useEffect(() => {
-        fetchFamilyMembers();
-    }, []);
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!formData.title.trim() || !formData.person || !formData.date) return;
+        onAdd(formData);
+        setFormData({ title: '', person: '', date: '', time: '', location: '', notes: '' });
+        setShowForm(false);
+    };
 
-    useEffect(() => {
-        if (selectedMemberId) {
-            fetchCalendarEvents(selectedMemberId);
-        } else {
-            setEvents([]); // Clear events if no member is selected
-        }
-    }, [selectedMemberId]);
-
-    const fetchFamilyMembers = async () => {
-        try {
-            const response = await fetch('/api/family-members');
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            setFamilyMembers(data);
-            // Optionally select the first member if available
-            if (data.length > 0) {
-                setSelectedMemberId(data[0].id);
-            }
-        } catch (err) {
-            console.error("Error fetching family members:", err);
-            setError("Failed to load family members.");
+    const handleDelete = (id) => {
+        if (window.confirm('Delete this appointment?')) {
+            onDelete(id);
         }
     };
 
-    const fetchCalendarEvents = async (memberId) => {
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await fetch(`/api/family-members/${memberId}/calendar-events`);
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-            }
-            const data = await response.json();
-            setEvents(data);
-        } catch (err) {
-            console.error("Error fetching calendar events:", err);
-            setError(err.message || "Failed to load calendar events.");
-        } finally {
-            setLoading(false);
-        }
+    const getMemberName = (id) => {
+        const member = familyMembers.find(m => m.id === id);
+        return member ? member.name : 'Unknown';
     };
+
+    const sortedAppointments = [...appointments].sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.time || '00:00'}`);
+        const dateB = new Date(`${b.date}T${b.time || '00:00'}`);
+        return dateA - dateB;
+    });
 
     return (
         <div className="container mx-auto p-4">
-            <h1 className="text-2xl font-bold mb-4">Appointments</h1>
-
-            <div className="mb-4">
-                <label htmlFor="member-select" className="block text-lg font-medium text-gray-700">Select Family Member:</label>
-                <select
-                    id="member-select"
-                    className="mt-1 block w-full md:w-1/2 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                    value={selectedMemberId}
-                    onChange={(e) => setSelectedMemberId(e.target.value)}
+            <div className="flex justify-between items-center mb-4">
+                <h1 className="text-2xl font-bold">Appointments</h1>
+                <button
+                    onClick={() => setShowForm(!showForm)}
+                    className="bg-blue-500 text-white px-4 py-2 rounded"
                 >
-                    <option value="">-- Select a member --</option>
-                    {familyMembers.map(member => (
-                        <option key={member.id} value={member.id}>
-                            {member.name} {member.googleConnected ? ' (Google Connected)' : ' (Google Not Connected)'}
-                        </option>
-                    ))}
-                </select>
+                    {showForm ? 'Cancel' : 'Add Appointment'}
+                </button>
             </div>
 
-            {loading && <p>Loading events...</p>}
-            {error && <p className="text-red-500">Error: {error}</p>}
-
-            {!loading && !error && events.length === 0 && selectedMemberId && (
-                <p>No upcoming events found for this family member.</p>
+            {showForm && (
+                <form onSubmit={handleSubmit} className="mb-6 p-4 border rounded bg-white shadow-sm space-y-3">
+                    <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        placeholder="Appointment title"
+                        className="border p-2 rounded w-full"
+                        required
+                    />
+                    <select
+                        value={formData.person}
+                        onChange={(e) => setFormData({ ...formData, person: Number(e.target.value) })}
+                        className="border p-2 rounded w-full"
+                        required
+                    >
+                        <option value="">Select family member</option>
+                        {familyMembers.map(m => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </select>
+                    <div className="grid grid-cols-2 gap-3">
+                        <input
+                            type="date"
+                            value={formData.date}
+                            onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                            className="border p-2 rounded"
+                            required
+                        />
+                        <input
+                            type="time"
+                            value={formData.time}
+                            onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                            className="border p-2 rounded"
+                        />
+                    </div>
+                    <input
+                        type="text"
+                        value={formData.location}
+                        onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                        placeholder="Location (optional)"
+                        className="border p-2 rounded w-full"
+                    />
+                    <textarea
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        placeholder="Notes (optional)"
+                        className="border p-2 rounded w-full"
+                        rows={2}
+                    />
+                    <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded">
+                        Save Appointment
+                    </button>
+                </form>
             )}
 
-            {!loading && !error && events.length > 0 && (
-                <div className="space-y-4">
-                    {events.map(event => (
-                        <div key={event.id} className="border p-4 rounded shadow-sm">
-                            <h3 className="text-xl font-semibold">{event.summary}</h3>
-                            <p className="text-gray-600">{event.start.dateTime ? new Date(event.start.dateTime).toLocaleString() : new Date(event.start.date).toDateString()}</p>
-                            {event.location && <p className="text-gray-500">Location: {event.location}</p>}
-                            {event.description && <p className="text-gray-500">{event.description}</p>}
+            {familyMembers.length === 0 && (
+                <p className="text-gray-500">Add family members first to create appointments.</p>
+            )}
+
+            {sortedAppointments.length === 0 && familyMembers.length > 0 && (
+                <p className="text-gray-500">No appointments yet.</p>
+            )}
+
+            <div className="space-y-4">
+                {sortedAppointments.map(apt => (
+                    <div key={apt.id} className="border p-4 rounded shadow-sm bg-white">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="text-xl font-semibold">{apt.title}</h3>
+                                <p className="text-gray-600">
+                                    {new Date(apt.date).toLocaleDateString()}
+                                    {apt.time && ` at ${apt.time}`}
+                                </p>
+                                <p className="text-sm text-gray-500">For: {getMemberName(apt.person)}</p>
+                                {apt.location && <p className="text-sm text-gray-500">Location: {apt.location}</p>}
+                                {apt.notes && <p className="text-sm text-gray-400 mt-1">{apt.notes}</p>}
+                            </div>
+                            <button
+                                onClick={() => handleDelete(apt.id)}
+                                className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+                            >
+                                Delete
+                            </button>
                         </div>
-                    ))}
-                </div>
-            )}
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };

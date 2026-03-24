@@ -1,5 +1,5 @@
 import { useLocalStorage } from './useLocalStorage';
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 
 const STORAGE_KEYS = {
   FAMILY_MEMBERS: 'familyDashboard_members',
@@ -20,24 +20,9 @@ export const useFamilyData = () => {
     language: 'en'
   });
   
-  const [nextId, setNextId] = useState(1);
-  
-  useEffect(() => {
-    const maxId = Math.max(
-      ...familyMembers.map(m => m.id || 0),
-      ...medications.map(m => m.id || 0),
-      ...appointments.map(a => a.id || 0),
-      ...tasks.map(t => t.id || 0),
-      0
-    );
-    setNextId(maxId + 1);
-  }, [familyMembers, medications, appointments, tasks]);
-  
   const getNextId = useCallback(() => {
-    const id = nextId;
-    setNextId(prev => prev + 1);
-    return id;
-  }, [nextId]);
+    return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+  }, []);
   
   const addFamilyMember = useCallback((member) => {
     const newMember = { ...member, id: getNextId() };
@@ -161,18 +146,36 @@ export const useFamilyData = () => {
   }, [familyMembers, medications, appointments, tasks, settings]);
   
   const importData = useCallback((file) => {
+    const validateArray = (arr, requiredFields) => {
+      if (!Array.isArray(arr)) return false;
+      return arr.every(item => item && typeof item === 'object' && requiredFields.every(f => f in item));
+    };
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (e) => {
         try {
           const data = JSON.parse(e.target.result);
-          
+
+          if (data.familyMembers && !validateArray(data.familyMembers, ['id', 'name'])) {
+            return reject({ success: false, message: 'Invalid family members data' });
+          }
+          if (data.medications && !validateArray(data.medications, ['id', 'name', 'person'])) {
+            return reject({ success: false, message: 'Invalid medications data' });
+          }
+          if (data.appointments && !validateArray(data.appointments, ['id', 'title'])) {
+            return reject({ success: false, message: 'Invalid appointments data' });
+          }
+          if (data.tasks && !validateArray(data.tasks, ['id', 'title'])) {
+            return reject({ success: false, message: 'Invalid tasks data' });
+          }
+
           if (data.familyMembers) setFamilyMembers(data.familyMembers);
           if (data.medications) setMedications(data.medications);
           if (data.appointments) setAppointments(data.appointments);
           if (data.tasks) setTasks(data.tasks);
           if (data.settings) setSettings(data.settings);
-          
+
           resolve({ success: true, message: 'Data imported successfully' });
         } catch (error) {
           reject({ success: false, message: 'Invalid file format' });

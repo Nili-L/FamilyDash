@@ -44,14 +44,17 @@ function App() {
   } = useFamilyData();
 
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const status = urlParams.get('status');
-    if (status === 'success') {
-      alert('Google account connected successfully!');
-      // Clean up the URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-    }
-  }, []);
+    const handleKeyDown = (e) => {
+      if (e.altKey) {
+        const keyMap = { d: 'dashboard', f: 'family', m: 'medications', a: 'appointments', t: 'tasks' };
+        const tab = keyMap[e.key.toLowerCase()];
+        if (tab) { e.preventDefault(); setActiveTab(tab); }
+      }
+      if (e.key === 'Escape' && showSettings) setShowSettings(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showSettings]);
   
   const handleImport = async (event) => {
     const file = event.target.files?.[0];
@@ -90,7 +93,13 @@ function App() {
           />
         );
       case 'family':
-        return <FamilyPage />;
+        return (
+          <FamilyPage
+            familyMembers={familyMembers}
+            onAdd={addFamilyMember}
+            onDelete={deleteFamilyMember}
+          />
+        );
       case 'medications':
         return (
           <MedicationTracker
@@ -103,7 +112,15 @@ function App() {
           />
         );
       case 'appointments':
-        return <AppointmentsPage />;
+        return (
+          <AppointmentsPage
+            appointments={appointments}
+            familyMembers={familyMembers}
+            onAdd={addAppointment}
+            onUpdate={updateAppointment}
+            onDelete={deleteAppointment}
+          />
+        );
       case 'tasks':
         return (
           <TaskManager

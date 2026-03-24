@@ -1,3 +1,8 @@
+const validationResult = (errors) => ({
+  isValid: Object.keys(errors).length === 0,
+  errors
+});
+
 export const validateFamilyMember = (member) => {
   const errors = {};
   
@@ -11,10 +16,7 @@ export const validateFamilyMember = (member) => {
     errors.color = 'Color is required';
   }
   
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors
-  };
+  return validationResult(errors);
 };
 
 export const validateMedication = (medication) => {
@@ -32,10 +34,7 @@ export const validateMedication = (medication) => {
     errors.time = 'Time is required';
   }
   
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors
-  };
+  return validationResult(errors);
 };
 
 export const validateAppointment = (appointment) => {
@@ -61,10 +60,7 @@ export const validateAppointment = (appointment) => {
     errors.location = 'Location must be less than 100 characters';
   }
   
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors
-  };
+  return validationResult(errors);
 };
 
 export const validateTask = (task) => {
@@ -84,10 +80,7 @@ export const validateTask = (task) => {
     errors.priority = 'Priority is required';
   }
   
-  return {
-    isValid: Object.keys(errors).length === 0,
-    errors
-  };
+  return validationResult(errors);
 };
 
 export const sanitizeInput = (input) => {
