@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { CheckSquare, Plus, Check, AlertCircle, Flag } from 'lucide-react';
 import AddItemForm from './AddItemForm';
 import { validateTask } from '../utils/dataValidation';
+import { getMemberColor, getMemberName } from '../utils/memberHelpers';
+import { getPriorityClass, PRIORITY_ORDER } from '../utils/priorityHelpers';
 
 const TaskManager = ({ 
   tasks, 
@@ -31,9 +33,8 @@ const TaskManager = ({
     }
     
     return filtered.sort((a, b) => {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
       if (a.completed !== b.completed) return a.completed ? 1 : -1;
-      if (a.priority !== b.priority) return priorityOrder[a.priority] - priorityOrder[b.priority];
+      if (a.priority !== b.priority) return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
       return 0;
     });
   }, [tasks, filter, priorityFilter]);
@@ -67,28 +68,6 @@ const TaskManager = ({
     setIsFormOpen(true);
   };
   
-  const getMemberColor = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return member?.color || '#6b7280';
-  };
-  
-  const getMemberName = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return member?.name || 'Unknown';
-  };
-  
-  const getPriorityClass = (priority) => {
-    switch (priority) {
-      case 'high':
-        return 'priority-high';
-      case 'medium':
-        return 'priority-medium';
-      case 'low':
-        return 'priority-low';
-      default:
-        return '';
-    }
-  };
   
   const fields = [
     {
@@ -299,7 +278,7 @@ const TaskManager = ({
                 <div
                   key={task.id}
                   className={`card p-4 border-l-4 ${task.completed ? 'opacity-75 bg-gray-50' : ''}`}
-                  style={{ borderLeftColor: getMemberColor(task.person) }}
+                  style={{ borderLeftColor: getMemberColor(task.person, familyMembers) }}
                 >
                   <div className="flex items-start gap-3">
                     <button
@@ -322,7 +301,7 @@ const TaskManager = ({
                           </p>
                           <div className="flex items-center gap-3 mt-1">
                             <span className="text-sm text-gray-600">
-                              {getMemberName(task.person)}
+                              {getMemberName(task.person, familyMembers)}
                             </span>
                             <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium ${getPriorityClass(task.priority)}`}>
                               <Flag className="w-3 h-3" />

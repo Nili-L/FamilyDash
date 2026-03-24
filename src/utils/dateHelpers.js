@@ -96,7 +96,9 @@ export const groupByDate = (items, dateField = 'date') => {
   return groups;
 };
 
+const timeSlotsCache = {};
 export const getTimeSlots = (interval = 30) => {
+  if (timeSlotsCache[interval]) return timeSlotsCache[interval];
   const slots = [];
   for (let hour = 0; hour < 24; hour++) {
     for (let minute = 0; minute < 60; minute += interval) {
@@ -104,5 +106,6 @@ export const getTimeSlots = (interval = 30) => {
       slots.push({ value: time, label: formatTime(time) });
     }
   }
+  timeSlotsCache[interval] = slots;
   return slots;
 };

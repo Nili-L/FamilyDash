@@ -4,6 +4,7 @@ import AddItemForm from './AddItemForm';
 import { formatTime, getCurrentDate, isOverdue } from '../utils/dateHelpers';
 import { validateMedication } from '../utils/dataValidation';
 import { getTimeSlots } from '../utils/dateHelpers';
+import { getMemberColor, getMemberName } from '../utils/memberHelpers';
 
 const MedicationTracker = ({ 
   medications, 
@@ -66,15 +67,6 @@ const MedicationTracker = ({
     setIsFormOpen(true);
   };
   
-  const getMemberColor = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return member?.color || '#6b7280';
-  };
-  
-  const getMemberName = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return member?.name || 'Unknown';
-  };
   
   const fields = [
     {
@@ -216,14 +208,14 @@ const MedicationTracker = ({
                     style={{ 
                       borderLeftColor: medication.taken || isOverdueMed 
                         ? undefined 
-                        : getMemberColor(medication.person) 
+                        : getMemberColor(medication.person, familyMembers) 
                     }}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div>
                         <h3 className="font-medium text-lg">{medication.name}</h3>
                         <p className="text-sm text-gray-600">
-                          For {getMemberName(medication.person)}
+                          For {getMemberName(medication.person, familyMembers)}
                         </p>
                       </div>
                       <button
