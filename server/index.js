@@ -390,23 +390,50 @@ app.delete('/api/data', (_req, res) => {
 // ---------------------------------------------------------------------------
 // Google OAuth routes
 // ---------------------------------------------------------------------------
+// Short-lived store for OAuth CSRF tokens (csrf → memberId, expires after 10 min)
+const pendingOAuthFlows = new Map();
+
 app.get('/auth/google', (req, res) => {
   const { memberId } = req.query;
   if (!memberId) return res.status(400).json({ error: 'memberId is required' });
+
+  const csrfToken = crypto.randomBytes(16).toString('hex');
+  const state = JSON.stringify({ memberId, csrf: csrfToken });
+  pendingOAuthFlows.set(csrfToken, { memberId, createdAt: Date.now() });
+
+  // Clean up expired entries (older than 10 minutes)
+  for (const [key, val] of pendingOAuthFlows) {
+    if (Date.now() - val.createdAt > 10 * 60 * 1000) pendingOAuthFlows.delete(key);
+  }
 
   const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
   const authorizationUrl = createOAuthClient().generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
-    state: memberId,
+    state,
     prompt: 'consent',
   });
   res.json({ authorizationUrl });
 });
 
 app.get('/auth/google/callback', async (req, res) => {
-  const { code, state: memberId } = req.query;
-  if (!code || !memberId) return res.status(400).send('Missing code or memberId');
+  const { code, state } = req.query;
+  if (!code || !state) return res.status(400).send('Missing code or state');
+
+  let memberId, csrf;
+  try {
+    const parsed = JSON.parse(state);
+    memberId = parsed.memberId;
+    csrf = parsed.csrf;
+  } catch {
+    return res.status(400).send('Invalid state parameter');
+  }
+
+  const pending = pendingOAuthFlows.get(csrf);
+  if (!pending || pending.memberId !== memberId) {
+    return res.status(403).send('Invalid or expired OAuth state — possible CSRF');
+  }
+  pendingOAuthFlows.delete(csrf);
 
   try {
     const client = createOAuthClient();
