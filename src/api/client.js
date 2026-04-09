@@ -41,7 +41,7 @@ export const authApi = {
 // Family Members
 // ---------------------------------------------------------------------------
 export const familyMembersApi = {
-  getAll: () => api('/api/family-members'),
+  getAll: (opts) => api('/api/family-members', opts),
   create: (member) => api('/api/family-members', { method: 'POST', body: JSON.stringify(member) }),
   update: (id, updates) => api(`/api/family-members/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   remove: (id) => api(`/api/family-members/${id}`, { method: 'DELETE' }),
@@ -51,7 +51,7 @@ export const familyMembersApi = {
 // Medications
 // ---------------------------------------------------------------------------
 export const medicationsApi = {
-  getAll: () => api('/api/medications'),
+  getAll: (opts) => api('/api/medications', opts),
   create: (med) => api('/api/medications', { method: 'POST', body: JSON.stringify(med) }),
   update: (id, updates) => api(`/api/medications/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   remove: (id) => api(`/api/medications/${id}`, { method: 'DELETE' }),
@@ -61,7 +61,7 @@ export const medicationsApi = {
 // Appointments
 // ---------------------------------------------------------------------------
 export const appointmentsApi = {
-  getAll: () => api('/api/appointments'),
+  getAll: (opts) => api('/api/appointments', opts),
   create: (apt) => api('/api/appointments', { method: 'POST', body: JSON.stringify(apt) }),
   update: (id, updates) => api(`/api/appointments/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   remove: (id) => api(`/api/appointments/${id}`, { method: 'DELETE' }),
@@ -71,7 +71,7 @@ export const appointmentsApi = {
 // Tasks
 // ---------------------------------------------------------------------------
 export const tasksApi = {
-  getAll: () => api('/api/tasks'),
+  getAll: (opts) => api('/api/tasks', opts),
   create: (task) => api('/api/tasks', { method: 'POST', body: JSON.stringify(task) }),
   update: (id, updates) => api(`/api/tasks/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   remove: (id) => api(`/api/tasks/${id}`, { method: 'DELETE' }),
