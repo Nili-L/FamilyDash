@@ -7,10 +7,19 @@ const crypto = require('crypto');
 
 dotenv.config();
 
+// Fail fast on missing required configuration
+const REQUIRED_ENV = ['APP_PASSWORD', 'TOKEN_ENCRYPTION_KEY'];
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`FATAL: ${key} environment variable is required`);
+    if (require.main === module) process.exit(1);
+  }
+}
+
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 // ---------------------------------------------------------------------------
 // Session-based authentication
@@ -108,18 +117,23 @@ function encryptTokens(tokens) {
 
 function decryptTokens(envelope) {
   if (!envelope || !envelope.iv || !envelope.tag || !envelope.data) return null;
-  const key = getEncryptionKey();
-  const decipher = crypto.createDecipheriv(
-    'aes-256-gcm',
-    key,
-    Buffer.from(envelope.iv, 'hex'),
-  );
-  decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
-  const decrypted = Buffer.concat([
-    decipher.update(Buffer.from(envelope.data, 'hex')),
-    decipher.final(),
-  ]);
-  return JSON.parse(decrypted.toString('utf8'));
+  try {
+    const key = getEncryptionKey();
+    const decipher = crypto.createDecipheriv(
+      'aes-256-gcm',
+      key,
+      Buffer.from(envelope.iv, 'hex'),
+    );
+    decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+    const decrypted = Buffer.concat([
+      decipher.update(Buffer.from(envelope.data, 'hex')),
+      decipher.final(),
+    ]);
+    return JSON.parse(decrypted.toString('utf8'));
+  } catch (err) {
+    console.error('Token decryption failed (key rotation or data corruption?):', err.message);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -127,12 +141,16 @@ function decryptTokens(envelope) {
 // ---------------------------------------------------------------------------
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-const DEFAULT_DATA = {
-  familyMembers: [],
-  medications: [],
-  appointments: [],
-  tasks: [],
-};
+const DEFAULT_DATA = Object.freeze({
+  familyMembers: Object.freeze([]),
+  medications: Object.freeze([]),
+  appointments: Object.freeze([]),
+  tasks: Object.freeze([]),
+});
+
+function freshData() {
+  return { familyMembers: [], medications: [], appointments: [], tasks: [] };
+}
 
 function loadData() {
   try {
@@ -156,7 +174,7 @@ function loadData() {
     console.error('Error migrating legacy data:', err);
   }
 
-  return { ...DEFAULT_DATA };
+  return freshData();
 }
 
 function saveData(data) {
@@ -382,7 +400,7 @@ app.post('/api/data/import', (req, res) => {
 });
 
 app.delete('/api/data', (_req, res) => {
-  data = { ...DEFAULT_DATA };
+  data = freshData();
   saveData(data);
   res.status(204).send();
 });
@@ -393,7 +411,7 @@ app.delete('/api/data', (_req, res) => {
 // Short-lived store for OAuth CSRF tokens (csrf → memberId, expires after 10 min)
 const pendingOAuthFlows = new Map();
 
-app.get('/auth/google', (req, res) => {
+app.get('/auth/google', requireAuth, (req, res) => {
   const { memberId } = req.query;
   if (!memberId) return res.status(400).json({ error: 'memberId is required' });
 
@@ -487,6 +505,14 @@ app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
     }
     res.status(500).json({ error: 'Failed to fetch calendar events' });
   }
+});
+
+// ---------------------------------------------------------------------------
+// Global error handler — prevent stack trace leaks
+// ---------------------------------------------------------------------------
+app.use((err, _req, res, _next) => {
+  console.error('Unhandled error:', err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 // ---------------------------------------------------------------------------
