@@ -13,6 +13,51 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
+// Token encryption (AES-256-GCM) — tokens are never stored in plaintext
+// ---------------------------------------------------------------------------
+const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY; // 64-char hex string (32 bytes)
+
+function getEncryptionKey() {
+  if (!ENCRYPTION_KEY || Buffer.from(ENCRYPTION_KEY, 'hex').length !== 32) {
+    throw new Error(
+      'TOKEN_ENCRYPTION_KEY must be a 64-character hex string (32 bytes). ' +
+      'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
+    );
+  }
+  return Buffer.from(ENCRYPTION_KEY, 'hex');
+}
+
+function encryptTokens(tokens) {
+  const key = getEncryptionKey();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const plaintext = JSON.stringify(tokens);
+  const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return {
+    iv: iv.toString('hex'),
+    tag: tag.toString('hex'),
+    data: encrypted.toString('hex'),
+  };
+}
+
+function decryptTokens(envelope) {
+  if (!envelope || !envelope.iv || !envelope.tag || !envelope.data) return null;
+  const key = getEncryptionKey();
+  const decipher = crypto.createDecipheriv(
+    'aes-256-gcm',
+    key,
+    Buffer.from(envelope.iv, 'hex'),
+  );
+  decipher.setAuthTag(Buffer.from(envelope.tag, 'hex'));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(envelope.data, 'hex')),
+    decipher.final(),
+  ]);
+  return JSON.parse(decrypted.toString('utf8'));
+}
+
+// ---------------------------------------------------------------------------
 // Data persistence — single JSON file for all entity types
 // ---------------------------------------------------------------------------
 const DATA_FILE = path.join(__dirname, 'data.json');
@@ -280,7 +325,7 @@ app.get('/auth/google/callback', async (req, res) => {
     const idx = data.familyMembers.findIndex((m) => m.id === memberId);
     if (idx === -1) return res.status(404).send('Family member not found');
 
-    data.familyMembers[idx].tokens = tokens;
+    data.familyMembers[idx].tokens = encryptTokens(tokens);
     saveData(data);
     res.redirect(`${process.env.FRONTEND_URL}/family?status=success`);
   } catch (error) {
@@ -296,7 +341,9 @@ app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
   }
 
   try {
-    oauth2Client.setCredentials(member.tokens);
+    const tokens = decryptTokens(member.tokens);
+    if (!tokens) return res.status(401).json({ error: 'Failed to decrypt tokens. Please re-authenticate.' });
+    oauth2Client.setCredentials(tokens);
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
     const now = new Date();
     const oneMonthLater = new Date();
