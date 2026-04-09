@@ -342,6 +342,7 @@ const TaskManager = ({
       )}
       
       <AddItemForm
+        key={editingTask?.id ?? 'new'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);

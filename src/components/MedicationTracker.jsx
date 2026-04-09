@@ -276,6 +276,7 @@ const MedicationTracker = ({
       )}
       
       <AddItemForm
+        key={editingMedication?.id ?? 'new'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);

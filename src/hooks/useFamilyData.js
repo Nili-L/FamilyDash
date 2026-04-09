@@ -24,6 +24,12 @@ export const useFamilyData = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Refs for current state — avoids stale closures in toggle callbacks
+  const medicationsRef = useRef(medications);
+  medicationsRef.current = medications;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
   // Wrap an async operation with error state management.
   // Uses a ref so the wrapper itself has a stable identity and doesn't
   // force every callback that uses it to re-render on error changes.
@@ -112,12 +118,12 @@ export const useFamilyData = () => {
   })(), [withErrorHandling]);
 
   const toggleMedicationTaken = useCallback((id) => withErrorHandling(async () => {
-    const med = medications.find((m) => m.id === id);
+    const med = medicationsRef.current.find((m) => m.id === id);
     if (!med) return;
     const updates = { taken: !med.taken, takenAt: !med.taken ? new Date().toISOString() : null };
     const updated = await medicationsApi.update(id, updates);
     setMedications((prev) => prev.map((m) => (m.id === id ? updated : m)));
-  })(), [withErrorHandling, medications]);
+  })(), [withErrorHandling]);
 
   // ── Appointments ────────────────────────────────────────────────────
   const addAppointment = useCallback((appointment) => withErrorHandling(async () => {
@@ -154,12 +160,12 @@ export const useFamilyData = () => {
   })(), [withErrorHandling]);
 
   const toggleTaskCompleted = useCallback((id) => withErrorHandling(async () => {
-    const task = tasks.find((t) => t.id === id);
+    const task = tasksRef.current.find((t) => t.id === id);
     if (!task) return;
     const updates = { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : null };
     const updated = await tasksApi.update(id, updates);
     setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
-  })(), [withErrorHandling, tasks]);
+  })(), [withErrorHandling]);
 
   // ── Bulk operations ─────────────────────────────────────────────────
   const exportData = useCallback(() => withErrorHandling(async () => {
@@ -169,8 +175,10 @@ export const useFamilyData = () => {
     const a = document.createElement('a');
     a.href = url;
     a.download = `family-dashboard-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   })(), [withErrorHandling]);
 
   const importData = useCallback(async (file) => {

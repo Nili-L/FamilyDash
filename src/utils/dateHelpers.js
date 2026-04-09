@@ -45,9 +45,10 @@ export const isOverdue = (date, time) => {
   }
   
   const [hours, minutes] = time.split(':');
-  targetDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-  
-  return isBefore(targetDate, now);
+  const withTime = new Date(targetDate);
+  withTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+
+  return isBefore(withTime, now);
 };
 
 export const getDaysUntil = (date) => {

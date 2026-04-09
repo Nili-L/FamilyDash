@@ -53,7 +53,7 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                     />
                     <select
                         value={formData.person}
-                        onChange={(e) => setFormData({ ...formData, person: Number(e.target.value) })}
+                        onChange={(e) => setFormData({ ...formData, person: e.target.value })}
                         className="border p-2 rounded w-full"
                         required
                     >

@@ -181,7 +181,9 @@ function App() {
         <form onSubmit={handleLogin} className="bg-white rounded-lg shadow-xl p-8 max-w-sm w-full space-y-4">
           <h1 className="text-2xl font-bold text-center text-primary-600">Family Dashboard</h1>
           <p className="text-sm text-gray-500 text-center">Enter the family password to continue</p>
+          <label htmlFor="login-password" className="sr-only">Password</label>
           <input
+            id="login-password"
             type="password"
             value={loginPassword}
             onChange={(e) => setLoginPassword(e.target.value)}

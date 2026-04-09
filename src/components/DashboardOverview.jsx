@@ -23,15 +23,15 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
   const todaysAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date === today)
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [appointments, today]);
-  
+
   const upcomingAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date > today)
       .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.time.localeCompare(b.time);
+        if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
+        return (a.time || '').localeCompare(b.time || '');
       })
       .slice(0, 3);
   }, [appointments, today]);
