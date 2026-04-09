@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 
@@ -12,6 +12,7 @@ const AddItemForm = ({
   cancelText = 'Cancel'
 }) => {
   const dialogRef = useFocusTrap(isOpen);
+  const titleId = useId();
 
   if (!isOpen) return null;
 
@@ -33,11 +34,11 @@ const AddItemForm = ({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="additem-dialog-title"
+        aria-labelledby={titleId}
         className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-slide-in"
       >
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 id="additem-dialog-title" className="text-xl font-semibold">{title}</h3>
+          <h3 id={titleId} className="text-xl font-semibold">{title}</h3>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"

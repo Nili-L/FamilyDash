@@ -18,6 +18,22 @@ app.use(express.json());
 const APP_PASSWORD = process.env.APP_PASSWORD;
 const activeSessions = new Set();
 
+function timingSafeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) {
+    crypto.timingSafeEqual(bufA, bufA); // constant-time even on length mismatch
+    return false;
+  }
+  return crypto.timingSafeEqual(bufA, bufB);
+}
+
+function sessionCookie(token, maxAge) {
+  const secure = process.env.NODE_ENV === 'production' ? ' Secure;' : '';
+  return `session=${token}; HttpOnly;${secure} SameSite=Strict; Path=/; Max-Age=${maxAge}`;
+}
+
 function getSessionToken(req) {
   const cookies = req.headers.cookie || '';
   const match = cookies.match(/session=([^;]+)/);
@@ -37,19 +53,19 @@ app.post('/auth/login', (req, res) => {
     return res.status(500).json({ error: 'APP_PASSWORD not configured on server' });
   }
   const { password } = req.body;
-  if (!password || password !== APP_PASSWORD) {
+  if (!password || !timingSafeCompare(password, APP_PASSWORD)) {
     return res.status(401).json({ error: 'Invalid password' });
   }
   const token = crypto.randomBytes(32).toString('hex');
   activeSessions.add(token);
-  res.setHeader('Set-Cookie', `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`);
+  res.setHeader('Set-Cookie', sessionCookie(token, 86400));
   res.json({ success: true });
 });
 
 app.post('/auth/logout', (req, res) => {
   const token = getSessionToken(req);
   if (token) activeSessions.delete(token);
-  res.setHeader('Set-Cookie', 'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  res.setHeader('Set-Cookie', sessionCookie('', 0));
   res.json({ success: true });
 });
 
@@ -189,7 +205,10 @@ app.put('/api/family-members/:id', (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { name, color } = req.body;
-  if (name !== undefined) data.familyMembers[idx].name = name;
+  if (name !== undefined) {
+    if (!name) return res.status(400).json({ error: 'Name cannot be empty' });
+    data.familyMembers[idx].name = name;
+  }
   if (color !== undefined) data.familyMembers[idx].color = color;
   saveData(data);
 
@@ -219,8 +238,10 @@ app.get('/api/medications', (_req, res) => {
 });
 
 app.post('/api/medications', (req, res) => {
+  const { name, person, time, notes } = req.body;
+  if (!name) return res.status(400).json({ error: 'Medication name is required' });
   const med = {
-    ...req.body,
+    name, person: person || null, time: time || null, notes: notes || null,
     id: crypto.randomUUID(),
     taken: false,
     createdAt: new Date().toISOString(),
@@ -234,7 +255,9 @@ app.put('/api/medications/:id', (req, res) => {
   const idx = data.medications.findIndex((m) => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
-  data.medications[idx] = { ...data.medications[idx], ...req.body, id: req.params.id };
+  const { name, person, time, notes, taken, takenAt } = req.body;
+  const allowed = { name, person, time, notes, taken, takenAt };
+  Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.medications[idx][k] = allowed[k]; });
   saveData(data);
   res.json(data.medications[idx]);
 });
@@ -255,8 +278,11 @@ app.get('/api/appointments', (_req, res) => {
 });
 
 app.post('/api/appointments', (req, res) => {
+  const { title, person, date, time, location, notes } = req.body;
+  if (!title) return res.status(400).json({ error: 'Title is required' });
   const apt = {
-    ...req.body,
+    title, person: person || null, date: date || null, time: time || null,
+    location: location || null, notes: notes || null,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
@@ -269,7 +295,9 @@ app.put('/api/appointments/:id', (req, res) => {
   const idx = data.appointments.findIndex((a) => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
-  data.appointments[idx] = { ...data.appointments[idx], ...req.body, id: req.params.id };
+  const { title, person, date, time, location, notes } = req.body;
+  const allowed = { title, person, date, time, location, notes };
+  Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.appointments[idx][k] = allowed[k]; });
   saveData(data);
   res.json(data.appointments[idx]);
 });
@@ -290,8 +318,10 @@ app.get('/api/tasks', (_req, res) => {
 });
 
 app.post('/api/tasks', (req, res) => {
+  const { task: taskText, person, priority, notes } = req.body;
+  if (!taskText) return res.status(400).json({ error: 'Task description is required' });
   const task = {
-    ...req.body,
+    task: taskText, person: person || null, priority: priority || null, notes: notes || null,
     id: crypto.randomUUID(),
     completed: false,
     createdAt: new Date().toISOString(),
@@ -305,7 +335,9 @@ app.put('/api/tasks/:id', (req, res) => {
   const idx = data.tasks.findIndex((t) => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
-  data.tasks[idx] = { ...data.tasks[idx], ...req.body, id: req.params.id };
+  const { task: taskText, person, priority, notes, completed, completedAt } = req.body;
+  const allowed = { task: taskText, person, priority, notes, completed, completedAt };
+  Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.tasks[idx][k] = allowed[k]; });
   saveData(data);
   res.json(data.tasks[idx]);
 });
@@ -334,7 +366,14 @@ app.get('/api/data/export', (_req, res) => {
 
 app.post('/api/data/import', (req, res) => {
   const incoming = req.body;
-  if (incoming.familyMembers) data.familyMembers = incoming.familyMembers;
+  if (incoming.familyMembers) {
+    data.familyMembers = incoming.familyMembers.map((m) => ({
+      id: m.id || crypto.randomUUID(),
+      name: m.name || 'Unknown',
+      color: m.color || null,
+      tokens: null, // Never import tokens
+    }));
+  }
   if (incoming.medications) data.medications = incoming.medications;
   if (incoming.appointments) data.appointments = incoming.appointments;
   if (incoming.tasks) data.tasks = incoming.tasks;

@@ -39,8 +39,11 @@ function App() {
   };
 
   const handleLogout = async () => {
-    await authApi.logout();
-    setAuthenticated(false);
+    try {
+      await authApi.logout();
+    } finally {
+      setAuthenticated(false);
+    }
   };
 
   const {

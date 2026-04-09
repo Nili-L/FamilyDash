@@ -2,8 +2,8 @@
 // show the login screen without every component needing to handle it.
 async function api(url, options = {}) {
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: { 'Content-Type': 'application/json', ...options.headers },
   });
 
   if (res.status === 401) {
@@ -26,7 +26,15 @@ async function api(url, options = {}) {
 export const authApi = {
   login: (password) => api('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
   logout: () => api('/auth/logout', { method: 'POST' }),
-  status: () => fetch('/auth/status').then((r) => r.json()),
+  status: async () => {
+    try {
+      const r = await fetch('/auth/status');
+      if (!r.ok) return { authenticated: false };
+      return r.json();
+    } catch {
+      return { authenticated: false };
+    }
+  },
 };
 
 // ---------------------------------------------------------------------------

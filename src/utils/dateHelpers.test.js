@@ -34,7 +34,7 @@ describe('formatDate', () => {
   });
 
   it('accepts Date objects', () => {
-    expect(formatDate(new Date('2026-04-09T05:00:00Z'))).toBe('Today');
+    expect(formatDate(new Date('2026-04-09T12:00:00Z'))).toBe('Today');
   });
 });
 
