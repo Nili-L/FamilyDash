@@ -6,6 +6,10 @@ export default defineConfig({
   base: '/FamilyDash/',
   server: {
     port: 5173,
-    open: true
-  }
+    open: true,
+    proxy: {
+      '/api': 'http://localhost:3001',
+      '/auth': 'http://localhost:3001',
+    },
+  },
 })

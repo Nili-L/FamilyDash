@@ -1,119 +1,115 @@
 # Contributing to Family Dashboard
 
-First off, thank you for considering contributing to Family Dashboard! It's people like you that make this tool better for families with special needs children.
+Thank you for considering contributing to Family Dashboard! This tool helps families with special needs children manage medications, appointments, and daily routines.
 
-## Code of Conduct
+## Getting Started
 
-This project and everyone participating in it is governed by our Code of Conduct. By participating, you are expected to uphold this code. Please be respectful and considerate of others, especially given the sensitive nature of this application's target audience.
-
-## How Can I Contribute?
-
-### Reporting Bugs
-
-Before creating bug reports, please check existing issues as you might find out that you don't need to create one. When you are creating a bug report, please include as many details as possible:
-
-* Use a clear and descriptive title
-* Describe the exact steps to reproduce the problem
-* Provide specific examples to demonstrate the steps
-* Describe the behavior you observed and what behavior you expected
-* Include screenshots if possible
-* Include your browser version and operating system
-
-### Suggesting Enhancements
-
-Enhancement suggestions are tracked as GitHub issues. When creating an enhancement suggestion, please include:
-
-* Use a clear and descriptive title
-* Provide a detailed description of the suggested enhancement
-* Explain why this enhancement would be useful to families using the dashboard
-* List any alternative solutions you've considered
-
-### Pull Requests
-
-1. Fork the repo and create your branch from `main`
-2. If you've added code that should be tested, add tests
-3. Ensure the test suite passes
-4. Make sure your code follows the existing code style
-5. Issue that pull request!
-
-## Development Process
-
-1. Clone your fork:
-```bash
-git clone https://github.com/your-username/family-dashboard.git
-cd family-dashboard
-```
-
-2. Install dependencies:
+1. Fork and clone the repository
+2. Install dependencies for both frontend and server:
 ```bash
 npm install
+cd server && npm install && cd ..
 ```
-
-3. Create a branch:
+3. Configure the server:
 ```bash
-git checkout -b feature/your-feature-name
+cp server/.env.example server/.env
+# Set APP_PASSWORD and TOKEN_ENCRYPTION_KEY
 ```
-
-4. Make your changes and commit:
+4. Start development:
 ```bash
-git add .
-git commit -m "Add your meaningful commit message"
+cd server && node index.js &   # API server on port 3001
+npm run dev                     # Frontend on port 5173
 ```
 
-5. Push to your fork:
+## Project Structure
+
+This is a full-stack app:
+
+- `src/` — React frontend (Vite + Tailwind)
+- `server/` — Express API server (JSON file storage, Google OAuth, encryption)
+- `src/hooks/useFamilyData.js` — Central data hook that calls the server API
+- `src/api/client.js` — Fetch wrapper with auth handling
+
+See the README for the full project structure.
+
+## Before Submitting a Pull Request
+
+### 1. Run tests
+
 ```bash
-git push origin feature/your-feature-name
+# All tests (98 total)
+npx vitest run
+
+# Or run frontend and server separately
+npx vitest run --dir src     # 53 frontend tests
+cd server && npx vitest run  # 45 server tests
 ```
 
-## Styleguides
+### 2. Run the linter
 
-### Git Commit Messages
-
-* Use the present tense ("Add feature" not "Added feature")
-* Use the imperative mood ("Move cursor to..." not "Moves cursor to...")
-* Limit the first line to 72 characters or less
-* Reference issues and pull requests liberally after the first line
-
-### JavaScript Styleguide
-
-* Use ES6+ features
-* Prefer functional components and hooks in React
-* Use meaningful variable names
-* Add comments for complex logic
-* Keep functions small and focused
-
-### CSS Styleguide
-
-* Use Tailwind utility classes when possible
-* Create custom components in index.css for reusable styles
-* Follow mobile-first responsive design
-* Ensure good contrast ratios for accessibility
-
-## Testing
-
-Run the linter before submitting:
 ```bash
 npm run lint
 ```
 
-Test your changes thoroughly:
-* Test with different family configurations
-* Test on mobile devices
-* Test with keyboard navigation
-* Test with screen readers if possible
+### 3. Verify the build
 
-## Accessibility Guidelines
+```bash
+npm run build
+```
 
-This application serves families with special needs, so accessibility is crucial:
+### 4. Test manually
 
-* All interactive elements must be keyboard accessible
-* Use semantic HTML elements
-* Provide appropriate ARIA labels
-* Ensure color contrast meets WCAG AA standards
-* Test with screen readers
+- Test on mobile viewports
+- Test keyboard navigation (Tab, Shift+Tab, Escape, Alt+key shortcuts)
+- Test the login flow (correct and incorrect password)
 
-## Questions?
+## Writing Code
 
-Feel free to open an issue with your question or reach out to the maintainers.
+### React Components
 
-Thank you for helping make Family Dashboard better for everyone! 🙏
+- Use functional components with hooks
+- Keep components focused on a single responsibility
+- Use `useFamilyData()` for all data access — don't call the API directly from components
+- Modal dialogs must use `useFocusTrap` and include `role="dialog"`, `aria-modal`, `aria-labelledby`
+
+### Server Endpoints
+
+- All `/api/*` routes are behind `requireAuth` middleware
+- Use field whitelisting on POST/PUT (never spread `req.body` directly)
+- Validate required fields and return 400 for missing/empty values
+- All mutations must call `await saveData(data)` (async)
+- Never expose OAuth tokens in API responses
+
+### Writing Tests
+
+- **Frontend tests** go in `src/utils/*.test.js` (colocated with source)
+- **Server tests** go in `server/index.test.js`
+- Server tests use `supertest` to drive the Express app
+- Clear state in `beforeEach` — call `_setData(freshData())`, `rateLimitStore.clear()`, `activeSessions.clear()`
+- Use `vi.useFakeTimers()` for date-dependent tests
+
+### Accessibility
+
+This app is designed for families with special needs children — accessibility matters:
+
+- All interactive elements must be keyboard accessible
+- Use semantic HTML
+- Provide ARIA labels for icon-only buttons
+- Ensure color is not the only indicator of state
+- Test with a screen reader if possible
+
+## Reporting Bugs
+
+Include:
+- Steps to reproduce
+- Expected vs actual behavior
+- Browser and OS
+- Console errors (if any)
+- Whether the issue is in the frontend, server, or both
+
+## Suggesting Features
+
+Open an issue describing:
+- What the feature does
+- Why it helps families using the dashboard
+- Any alternative approaches you considered

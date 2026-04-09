@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calendar, Clock, Pill, CheckSquare, User, AlertCircle, Flag } from 'lucide-react';
 import { formatDate, formatTime, getCurrentDate, getCurrentTime, isOverdue, getDaysUntil } from '../utils/dateHelpers';
+import { getMemberById } from '../utils/memberHelpers';
+import { getPriorityClass } from '../utils/priorityHelpers';
 
-const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const today = getCurrentDate();
-  
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+  return <>{formatDate(now)} &bull; {now.toLocaleTimeString()}</>;
+}
+
+const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) => {
+  const today = getCurrentDate();
   
   const todaysMedications = useMemo(() => {
     return medications
@@ -23,15 +25,15 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
   const todaysAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date === today)
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [appointments, today]);
-  
+
   const upcomingAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date > today)
       .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.time.localeCompare(b.time);
+        if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
+        return (a.time || '').localeCompare(b.time || '');
       })
       .slice(0, 3);
   }, [appointments, today]);
@@ -49,27 +51,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
     return todaysMedications.filter(med => isOverdue(today, med.time));
   }, [todaysMedications, today]);
   
-  const getMemberInfo = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return {
-      name: member?.name || 'Unknown',
-      color: member?.color || '#6b7280',
-      initial: member?.name?.charAt(0).toUpperCase() || '?'
-    };
-  };
-  
-  const getPriorityClass = (priority) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-danger-100 text-danger-800 border-danger-300';
-      case 'medium':
-        return 'bg-warning-100 text-warning-800 border-warning-300';
-      case 'low':
-        return 'bg-success-100 text-success-800 border-success-300';
-      default:
-        return '';
-    }
-  };
+  const getMemberInfo = (personId) => getMemberById(personId, familyMembers);
   
   if (familyMembers.length === 0) {
     return (
@@ -77,7 +59,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-2">Family Dashboard</h1>
           <p className="text-gray-600">
-            {formatDate(currentTime)} • {currentTime.toLocaleTimeString()}
+            <LiveClock />
           </p>
         </div>
         
@@ -100,7 +82,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">Family Dashboard</h1>
         <p className="text-gray-600">
-          {formatDate(currentTime)} • {currentTime.toLocaleTimeString()}
+          <LiveClock />
         </p>
       </div>
       

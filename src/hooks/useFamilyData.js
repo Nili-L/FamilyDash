@@ -1,233 +1,242 @@
-import { useLocalStorage } from './useLocalStorage';
-import { useCallback } from 'react';
-
-const STORAGE_KEYS = {
-  FAMILY_MEMBERS: 'familyDashboard_members',
-  MEDICATIONS: 'familyDashboard_medications',
-  APPOINTMENTS: 'familyDashboard_appointments',
-  TASKS: 'familyDashboard_tasks',
-  SETTINGS: 'familyDashboard_settings'
-};
+import { useState, useEffect, useCallback, useRef } from 'react';
+import {
+  familyMembersApi,
+  medicationsApi,
+  appointmentsApi,
+  tasksApi,
+  dataApi,
+} from '../api/client';
 
 export const useFamilyData = () => {
-  const [familyMembers, setFamilyMembers] = useLocalStorage(STORAGE_KEYS.FAMILY_MEMBERS, []);
-  const [medications, setMedications] = useLocalStorage(STORAGE_KEYS.MEDICATIONS, []);
-  const [appointments, setAppointments] = useLocalStorage(STORAGE_KEYS.APPOINTMENTS, []);
-  const [tasks, setTasks] = useLocalStorage(STORAGE_KEYS.TASKS, []);
-  const [settings, setSettings] = useLocalStorage(STORAGE_KEYS.SETTINGS, {
-    theme: 'light',
-    notifications: true,
-    language: 'en'
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [medications, setMedications] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [settings, setSettings] = useState(() => {
+    try {
+      const stored = localStorage.getItem('familyDashboard_settings');
+      return stored ? JSON.parse(stored) : { theme: 'light', notifications: true, language: 'en' };
+    } catch {
+      return { theme: 'light', notifications: true, language: 'en' };
+    }
   });
-  
-  const getNextId = useCallback(() => {
-    return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Refs for current state — avoids stale closures in toggle callbacks
+  const medicationsRef = useRef(medications);
+  medicationsRef.current = medications;
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
+
+  // Wrap an async operation with error state management.
+  // Uses a ref so the wrapper itself has a stable identity and doesn't
+  // force every callback that uses it to re-render on error changes.
+  const setErrorRef = useRef(setError);
+  setErrorRef.current = setError;
+
+  const withErrorHandling = useCallback((fn) => {
+    return async (...args) => {
+      try {
+        setErrorRef.current(null);
+        return await fn(...args);
+      } catch (err) {
+        setErrorRef.current(err.message);
+        throw err;
+      }
+    };
   }, []);
-  
-  const addFamilyMember = useCallback((member) => {
-    const newMember = { ...member, id: getNextId() };
-    setFamilyMembers(prev => [...prev, newMember]);
-    return newMember;
-  }, [getNextId, setFamilyMembers]);
-  
-  const updateFamilyMember = useCallback((id, updates) => {
-    setFamilyMembers(prev => 
-      prev.map(member => member.id === id ? { ...member, ...updates } : member)
-    );
-  }, [setFamilyMembers]);
-  
-  const deleteFamilyMember = useCallback((id) => {
-    setFamilyMembers(prev => prev.filter(member => member.id !== id));
-    setMedications(prev => prev.filter(med => med.person !== id));
-    setAppointments(prev => prev.filter(apt => apt.person !== id));
-    setTasks(prev => prev.filter(task => task.person !== id));
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks]);
-  
-  const addMedication = useCallback((medication) => {
-    const newMedication = { 
-      ...medication, 
-      id: getNextId(),
-      taken: false,
-      createdAt: new Date().toISOString()
-    };
-    setMedications(prev => [...prev, newMedication]);
-    return newMedication;
-  }, [getNextId, setMedications]);
-  
-  const updateMedication = useCallback((id, updates) => {
-    setMedications(prev => 
-      prev.map(med => med.id === id ? { ...med, ...updates } : med)
-    );
-  }, [setMedications]);
-  
-  const deleteMedication = useCallback((id) => {
-    setMedications(prev => prev.filter(med => med.id !== id));
-  }, [setMedications]);
-  
-  const toggleMedicationTaken = useCallback((id) => {
-    setMedications(prev => 
-      prev.map(med => 
-        med.id === id 
-          ? { ...med, taken: !med.taken, takenAt: !med.taken ? new Date().toISOString() : null }
-          : med
-      )
-    );
-  }, [setMedications]);
-  
-  const addAppointment = useCallback((appointment) => {
-    const newAppointment = { 
-      ...appointment, 
-      id: getNextId(),
-      createdAt: new Date().toISOString()
-    };
-    setAppointments(prev => [...prev, newAppointment]);
-    return newAppointment;
-  }, [getNextId, setAppointments]);
-  
-  const updateAppointment = useCallback((id, updates) => {
-    setAppointments(prev => 
-      prev.map(apt => apt.id === id ? { ...apt, ...updates } : apt)
-    );
-  }, [setAppointments]);
-  
-  const deleteAppointment = useCallback((id) => {
-    setAppointments(prev => prev.filter(apt => apt.id !== id));
-  }, [setAppointments]);
-  
-  const addTask = useCallback((task) => {
-    const newTask = { 
-      ...task, 
-      id: getNextId(),
-      completed: false,
-      createdAt: new Date().toISOString()
-    };
-    setTasks(prev => [...prev, newTask]);
-    return newTask;
-  }, [getNextId, setTasks]);
-  
-  const updateTask = useCallback((id, updates) => {
-    setTasks(prev => 
-      prev.map(task => task.id === id ? { ...task, ...updates } : task)
-    );
-  }, [setTasks]);
-  
-  const deleteTask = useCallback((id) => {
-    setTasks(prev => prev.filter(task => task.id !== id));
-  }, [setTasks]);
-  
-  const toggleTaskCompleted = useCallback((id) => {
-    setTasks(prev => 
-      prev.map(task => 
-        task.id === id 
-          ? { ...task, completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : null }
-          : task
-      )
-    );
-  }, [setTasks]);
-  
-  const exportData = useCallback(() => {
-    const data = {
-      familyMembers,
-      medications,
-      appointments,
-      tasks,
-      settings,
-      exportedAt: new Date().toISOString(),
-      version: '1.0.0'
-    };
-    
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+
+  // ── Initial data fetch ──────────────────────────────────────────────
+  const fetchAll = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const [members, meds, apts, tks] = await Promise.all([
+        familyMembersApi.getAll(),
+        medicationsApi.getAll(),
+        appointmentsApi.getAll(),
+        tasksApi.getAll(),
+      ]);
+      setFamilyMembers(members);
+      setMedications(meds);
+      setAppointments(apts);
+      setTasks(tks);
+    } catch (err) {
+      setError(err.message);
+      console.error('Failed to fetch data:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // ── Settings (stays in localStorage — purely UI preferences) ────────
+  const updateSettings = useCallback((value) => {
+    const next = typeof value === 'function' ? value(settings) : value;
+    setSettings(next);
+    try { localStorage.setItem('familyDashboard_settings', JSON.stringify(next)); } catch {}
+  }, [settings]);
+
+  // ── Family Members ──────────────────────────────────────────────────
+  const addFamilyMember = useCallback((member) => withErrorHandling(async () => {
+    const created = await familyMembersApi.create(member);
+    setFamilyMembers((prev) => [...prev, created]);
+    return created;
+  })(), [withErrorHandling]);
+
+  const updateFamilyMember = useCallback((id, updates) => withErrorHandling(async () => {
+    const updated = await familyMembersApi.update(id, updates);
+    setFamilyMembers((prev) => prev.map((m) => (m.id === id ? updated : m)));
+  })(), [withErrorHandling]);
+
+  const deleteFamilyMember = useCallback((id) => withErrorHandling(async () => {
+    await familyMembersApi.remove(id);
+    // Server cascade-deletes associated data; refetch to stay in sync
+    await fetchAll();
+  })(), [withErrorHandling, fetchAll]);
+
+  // ── Medications ─────────────────────────────────────────────────────
+  const addMedication = useCallback((medication) => withErrorHandling(async () => {
+    const created = await medicationsApi.create(medication);
+    setMedications((prev) => [...prev, created]);
+    return created;
+  })(), [withErrorHandling]);
+
+  const updateMedication = useCallback((id, updates) => withErrorHandling(async () => {
+    const updated = await medicationsApi.update(id, updates);
+    setMedications((prev) => prev.map((m) => (m.id === id ? updated : m)));
+  })(), [withErrorHandling]);
+
+  const deleteMedication = useCallback((id) => withErrorHandling(async () => {
+    await medicationsApi.remove(id);
+    setMedications((prev) => prev.filter((m) => m.id !== id));
+  })(), [withErrorHandling]);
+
+  const toggleMedicationTaken = useCallback((id) => withErrorHandling(async () => {
+    const med = medicationsRef.current.find((m) => m.id === id);
+    if (!med) return;
+    const updates = { taken: !med.taken, takenAt: !med.taken ? new Date().toISOString() : null };
+    const updated = await medicationsApi.update(id, updates);
+    setMedications((prev) => prev.map((m) => (m.id === id ? updated : m)));
+  })(), [withErrorHandling]);
+
+  // ── Appointments ────────────────────────────────────────────────────
+  const addAppointment = useCallback((appointment) => withErrorHandling(async () => {
+    const created = await appointmentsApi.create(appointment);
+    setAppointments((prev) => [...prev, created]);
+    return created;
+  })(), [withErrorHandling]);
+
+  const updateAppointment = useCallback((id, updates) => withErrorHandling(async () => {
+    const updated = await appointmentsApi.update(id, updates);
+    setAppointments((prev) => prev.map((a) => (a.id === id ? updated : a)));
+  })(), [withErrorHandling]);
+
+  const deleteAppointment = useCallback((id) => withErrorHandling(async () => {
+    await appointmentsApi.remove(id);
+    setAppointments((prev) => prev.filter((a) => a.id !== id));
+  })(), [withErrorHandling]);
+
+  // ── Tasks ───────────────────────────────────────────────────────────
+  const addTask = useCallback((task) => withErrorHandling(async () => {
+    const created = await tasksApi.create(task);
+    setTasks((prev) => [...prev, created]);
+    return created;
+  })(), [withErrorHandling]);
+
+  const updateTask = useCallback((id, updates) => withErrorHandling(async () => {
+    const updated = await tasksApi.update(id, updates);
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  })(), [withErrorHandling]);
+
+  const deleteTask = useCallback((id) => withErrorHandling(async () => {
+    await tasksApi.remove(id);
+    setTasks((prev) => prev.filter((t) => t.id !== id));
+  })(), [withErrorHandling]);
+
+  const toggleTaskCompleted = useCallback((id) => withErrorHandling(async () => {
+    const task = tasksRef.current.find((t) => t.id === id);
+    if (!task) return;
+    const updates = { completed: !task.completed, completedAt: !task.completed ? new Date().toISOString() : null };
+    const updated = await tasksApi.update(id, updates);
+    setTasks((prev) => prev.map((t) => (t.id === id ? updated : t)));
+  })(), [withErrorHandling]);
+
+  // ── Bulk operations ─────────────────────────────────────────────────
+  const exportData = useCallback(() => withErrorHandling(async () => {
+    const exported = await dataApi.exportAll();
+    const blob = new Blob([JSON.stringify(exported, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = `family-dashboard-backup-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(url);
-  }, [familyMembers, medications, appointments, tasks, settings]);
-  
-  const importData = useCallback((file) => {
-    const validateArray = (arr, requiredFields) => {
-      if (!Array.isArray(arr)) return false;
-      return arr.every(item => item && typeof item === 'object' && requiredFields.every(f => f in item));
-    };
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+  })(), [withErrorHandling]);
 
+  const importData = useCallback(async (file) => {
+    setError(null);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
-          const data = JSON.parse(e.target.result);
-
-          if (data.familyMembers && !validateArray(data.familyMembers, ['id', 'name'])) {
-            return reject({ success: false, message: 'Invalid family members data' });
-          }
-          if (data.medications && !validateArray(data.medications, ['id', 'name', 'person'])) {
-            return reject({ success: false, message: 'Invalid medications data' });
-          }
-          if (data.appointments && !validateArray(data.appointments, ['id', 'title'])) {
-            return reject({ success: false, message: 'Invalid appointments data' });
-          }
-          if (data.tasks && !validateArray(data.tasks, ['id', 'title'])) {
-            return reject({ success: false, message: 'Invalid tasks data' });
-          }
-
-          if (data.familyMembers) setFamilyMembers(data.familyMembers);
-          if (data.medications) setMedications(data.medications);
-          if (data.appointments) setAppointments(data.appointments);
-          if (data.tasks) setTasks(data.tasks);
-          if (data.settings) setSettings(data.settings);
-
-          resolve({ success: true, message: 'Data imported successfully' });
-        } catch (error) {
-          reject({ success: false, message: 'Invalid file format' });
+          const parsed = JSON.parse(e.target.result);
+          const result = await dataApi.importAll(parsed);
+          await fetchAll();
+          resolve(result);
+        } catch (err) {
+          setError(err.message);
+          reject({ success: false, message: err.message || 'Invalid file format' });
         }
       };
       reader.onerror = () => reject({ success: false, message: 'Error reading file' });
       reader.readAsText(file);
     });
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks, setSettings]);
-  
-  const clearAllData = useCallback(() => {
-    if (window.confirm('Are you sure you want to clear all data? This action cannot be undone.')) {
-      setFamilyMembers([]);
-      setMedications([]);
-      setAppointments([]);
-      setTasks([]);
-      setSettings({
-        theme: 'light',
-        notifications: true,
-        language: 'en'
-      });
-    }
-  }, [setFamilyMembers, setMedications, setAppointments, setTasks, setSettings]);
-  
+  }, [fetchAll]);
+
+  const clearAllData = useCallback(() => withErrorHandling(async () => {
+    await dataApi.clearAll();
+    setFamilyMembers([]);
+    setMedications([]);
+    setAppointments([]);
+    setTasks([]);
+  })(), [withErrorHandling]);
+
   return {
     familyMembers,
     medications,
     appointments,
     tasks,
     settings,
-    
+    loading,
+    error,
+
     addFamilyMember,
     updateFamilyMember,
     deleteFamilyMember,
-    
+
     addMedication,
     updateMedication,
     deleteMedication,
     toggleMedicationTaken,
-    
+
     addAppointment,
     updateAppointment,
     deleteAppointment,
-    
+
     addTask,
     updateTask,
     deleteTask,
     toggleTaskCompleted,
-    
-    updateSettings: setSettings,
+
+    updateSettings,
     exportData,
     importData,
-    clearAllData
+    clearAllData,
   };
 };

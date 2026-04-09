@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDelete }) => {
     const [showForm, setShowForm] = useState(false);
     const [formData, setFormData] = useState({ title: '', person: '', date: '', time: '', location: '', notes: '' });
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -10,12 +12,6 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
         onAdd(formData);
         setFormData({ title: '', person: '', date: '', time: '', location: '', notes: '' });
         setShowForm(false);
-    };
-
-    const handleDelete = (id) => {
-        if (window.confirm('Delete this appointment?')) {
-            onDelete(id);
-        }
     };
 
     const getMemberName = (id) => {
@@ -35,26 +31,26 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                 <h1 className="text-2xl font-bold">Appointments</h1>
                 <button
                     onClick={() => setShowForm(!showForm)}
-                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                    className="btn btn-primary px-4 py-2"
                 >
                     {showForm ? 'Cancel' : 'Add Appointment'}
                 </button>
             </div>
 
             {showForm && (
-                <form onSubmit={handleSubmit} className="mb-6 p-4 border rounded bg-white shadow-sm space-y-3">
+                <form onSubmit={handleSubmit} className="mb-6 p-4 card space-y-3">
                     <input
                         type="text"
                         value={formData.title}
                         onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         placeholder="Appointment title"
-                        className="border p-2 rounded w-full"
+                        className="input"
                         required
                     />
                     <select
                         value={formData.person}
-                        onChange={(e) => setFormData({ ...formData, person: Number(e.target.value) })}
-                        className="border p-2 rounded w-full"
+                        onChange={(e) => setFormData({ ...formData, person: e.target.value })}
+                        className="input"
                         required
                     >
                         <option value="">Select family member</option>
@@ -67,14 +63,14 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                             type="date"
                             value={formData.date}
                             onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                            className="border p-2 rounded"
+                            className="input"
                             required
                         />
                         <input
                             type="time"
                             value={formData.time}
                             onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-                            className="border p-2 rounded"
+                            className="input"
                         />
                     </div>
                     <input
@@ -82,16 +78,16 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                         value={formData.location}
                         onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                         placeholder="Location (optional)"
-                        className="border p-2 rounded w-full"
+                        className="input"
                     />
                     <textarea
                         value={formData.notes}
                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                         placeholder="Notes (optional)"
-                        className="border p-2 rounded w-full"
+                        className="input"
                         rows={2}
                     />
-                    <button type="submit" className="bg-green-500 text-white px-4 py-2 rounded">
+                    <button type="submit" className="btn btn-primary px-4 py-2">
                         Save Appointment
                     </button>
                 </form>
@@ -107,7 +103,7 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
 
             <div className="space-y-4">
                 {sortedAppointments.map(apt => (
-                    <div key={apt.id} className="border p-4 rounded shadow-sm bg-white">
+                    <div key={apt.id} className="card p-4">
                         <div className="flex justify-between items-start">
                             <div>
                                 <h3 className="text-xl font-semibold">{apt.title}</h3>
@@ -120,8 +116,8 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                                 {apt.notes && <p className="text-sm text-gray-400 mt-1">{apt.notes}</p>}
                             </div>
                             <button
-                                onClick={() => handleDelete(apt.id)}
-                                className="bg-red-500 text-white px-3 py-1 rounded text-sm"
+                                onClick={() => setConfirmDelete(apt)}
+                                className="btn btn-danger px-3 py-1 text-sm"
                             >
                                 Delete
                             </button>
@@ -129,6 +125,16 @@ const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDele
                     </div>
                 ))}
             </div>
+
+            {confirmDelete && (
+                <ConfirmDialog
+                    message={`Delete appointment "${confirmDelete.title}"?`}
+                    confirmText="Delete"
+                    danger
+                    onConfirm={() => { onDelete(confirmDelete.id); setConfirmDelete(null); }}
+                    onCancel={() => setConfirmDelete(null)}
+                />
+            )}
         </div>
     );
 };

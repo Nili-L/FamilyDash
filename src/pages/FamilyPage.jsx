@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const FamilyPage = ({ familyMembers, onAdd, onDelete }) => {
     const [newMemberName, setNewMemberName] = useState('');
+    const [confirmDelete, setConfirmDelete] = useState(null);
 
     const handleAddMember = (e) => {
         e.preventDefault();
         if (!newMemberName.trim()) return;
         onAdd({ name: newMemberName.trim() });
         setNewMemberName('');
-    };
-
-    const handleDeleteMember = (id) => {
-        if (window.confirm('Delete this family member? Their medications, appointments, and tasks will also be removed.')) {
-            onDelete(id);
-        }
     };
 
     return (
@@ -28,7 +24,7 @@ const FamilyPage = ({ familyMembers, onAdd, onDelete }) => {
                     placeholder="Add new family member"
                     className="border p-2 rounded w-full md:w-1/2"
                 />
-                <button type="submit" className="bg-blue-500 text-white p-2 rounded">
+                <button type="submit" className="btn btn-primary p-2 rounded">
                     Add Member
                 </button>
             </form>
@@ -39,17 +35,27 @@ const FamilyPage = ({ familyMembers, onAdd, onDelete }) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {familyMembers.map((member) => (
-                    <div key={member.id} className="border p-4 rounded shadow-md">
+                    <div key={member.id} className="card p-4">
                         <h2 className="text-xl font-semibold mb-2">{member.name}</h2>
                         <button
-                            onClick={() => handleDeleteMember(member.id)}
-                            className="bg-red-500 text-white p-2 rounded text-sm"
+                            onClick={() => setConfirmDelete(member)}
+                            className="btn btn-danger p-2 text-sm"
                         >
                             Delete
                         </button>
                     </div>
                 ))}
             </div>
+
+            {confirmDelete && (
+                <ConfirmDialog
+                    message={`Delete ${confirmDelete.name}? Their medications, appointments, and tasks will also be removed.`}
+                    confirmText="Delete"
+                    danger
+                    onConfirm={() => { onDelete(confirmDelete.id); setConfirmDelete(null); }}
+                    onCancel={() => setConfirmDelete(null)}
+                />
+            )}
         </div>
     );
 };
