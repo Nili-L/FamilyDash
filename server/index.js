@@ -1,163 +1,330 @@
-
 const express = require('express');
 const dotenv = require('dotenv');
 const { google } = require('googleapis');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 dotenv.config();
-console.log('Environment variables loaded.');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-console.log(`Server attempting to run on port: ${PORT}`);
-console.log(`GOOGLE_CLIENT_ID: ${process.env.GOOGLE_CLIENT_ID ? 'Loaded' : 'Not Loaded'}`);
-console.log(`GOOGLE_REDIRECT_URI: ${process.env.GOOGLE_REDIRECT_URI ? 'Loaded' : 'Not Loaded'}`);
 
 app.use(express.json());
 
-// In-memory store for family members (for simplicity, replace with a database later)
-const familyMembersFilePath = path.join(__dirname, 'familyMembers.json');
-let familyMembers = [];
+// ---------------------------------------------------------------------------
+// Data persistence — single JSON file for all entity types
+// ---------------------------------------------------------------------------
+const DATA_FILE = path.join(__dirname, 'data.json');
 
-// Load family members from file if it exists
-try {
-    if (fs.existsSync(familyMembersFilePath)) {
-        const data = fs.readFileSync(familyMembersFilePath, 'utf8');
-        familyMembers = JSON.parse(data);
-    }
-} catch (err) {
-    console.error('Error loading family members:', err);
-}
-
-// Helper to save family members to file
-const saveFamilyMembers = () => {
-    fs.writeFileSync(familyMembersFilePath, JSON.stringify(familyMembers, null, 2), 'utf8');
+const DEFAULT_DATA = {
+  familyMembers: [],
+  medications: [],
+  appointments: [],
+  tasks: [],
 };
 
+function loadData() {
+  try {
+    if (fs.existsSync(DATA_FILE)) {
+      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    }
+  } catch (err) {
+    console.error('Error loading data file:', err);
+  }
+
+  // Migrate from legacy familyMembers.json if it exists
+  const legacyPath = path.join(__dirname, 'familyMembers.json');
+  try {
+    if (fs.existsSync(legacyPath)) {
+      const members = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+      const migrated = { ...DEFAULT_DATA, familyMembers: members };
+      saveData(migrated);
+      return migrated;
+    }
+  } catch (err) {
+    console.error('Error migrating legacy data:', err);
+  }
+
+  return { ...DEFAULT_DATA };
+}
+
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+}
+
+let data = loadData();
+
+// ---------------------------------------------------------------------------
 // Google OAuth2 setup
+// ---------------------------------------------------------------------------
 const oauth2Client = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GOOGLE_REDIRECT_URI,
 );
 
-// Routes for family member management
-app.get('/api/family-members', (req, res) => {
-    res.json(familyMembers.map(member => ({
-        id: member.id,
-        name: member.name,
-        googleConnected: !!member.tokens // Indicate if Google is connected
-    })));
+// ---------------------------------------------------------------------------
+// Family Members
+// ---------------------------------------------------------------------------
+app.get('/api/family-members', (_req, res) => {
+  res.json(
+    data.familyMembers.map((m) => ({
+      id: m.id,
+      name: m.name,
+      color: m.color,
+      googleConnected: !!m.tokens,
+    })),
+  );
 });
 
 app.post('/api/family-members', (req, res) => {
-    const { name } = req.body;
-    if (!name) {
-        return res.status(400).json({ error: 'Name is required' });
-    }
-    const newMember = { id: Date.now().toString(), name, tokens: null };
-    familyMembers.push(newMember);
-    saveFamilyMembers();
-    res.status(201).json(newMember);
+  const { name, color } = req.body;
+  if (!name) return res.status(400).json({ error: 'Name is required' });
+
+  const newMember = { id: crypto.randomUUID(), name, color: color || null, tokens: null };
+  data.familyMembers.push(newMember);
+  saveData(data);
+  res.status(201).json({ id: newMember.id, name: newMember.name, color: newMember.color, googleConnected: false });
+});
+
+app.put('/api/family-members/:id', (req, res) => {
+  const idx = data.familyMembers.findIndex((m) => m.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+
+  const { name, color } = req.body;
+  if (name !== undefined) data.familyMembers[idx].name = name;
+  if (color !== undefined) data.familyMembers[idx].color = color;
+  saveData(data);
+
+  const m = data.familyMembers[idx];
+  res.json({ id: m.id, name: m.name, color: m.color, googleConnected: !!m.tokens });
 });
 
 app.delete('/api/family-members/:id', (req, res) => {
-    const { id } = req.params;
-    const initialLength = familyMembers.length;
-    familyMembers = familyMembers.filter(member => member.id !== id);
-    if (familyMembers.length < initialLength) {
-        saveFamilyMembers();
-        res.status(204).send();
-    } else {
-        res.status(404).json({ error: 'Family member not found' });
-    }
+  const { id } = req.params;
+  const before = data.familyMembers.length;
+  data.familyMembers = data.familyMembers.filter((m) => m.id !== id);
+  if (data.familyMembers.length === before) return res.status(404).json({ error: 'Not found' });
+
+  // Cascade: remove associated medications, appointments, tasks
+  data.medications = data.medications.filter((m) => m.person !== id);
+  data.appointments = data.appointments.filter((a) => a.person !== id);
+  data.tasks = data.tasks.filter((t) => t.person !== id);
+  saveData(data);
+  res.status(204).send();
 });
 
+// ---------------------------------------------------------------------------
+// Medications
+// ---------------------------------------------------------------------------
+app.get('/api/medications', (_req, res) => {
+  res.json(data.medications);
+});
+
+app.post('/api/medications', (req, res) => {
+  const med = {
+    ...req.body,
+    id: crypto.randomUUID(),
+    taken: false,
+    createdAt: new Date().toISOString(),
+  };
+  data.medications.push(med);
+  saveData(data);
+  res.status(201).json(med);
+});
+
+app.put('/api/medications/:id', (req, res) => {
+  const idx = data.medications.findIndex((m) => m.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+
+  data.medications[idx] = { ...data.medications[idx], ...req.body, id: req.params.id };
+  saveData(data);
+  res.json(data.medications[idx]);
+});
+
+app.delete('/api/medications/:id', (req, res) => {
+  const before = data.medications.length;
+  data.medications = data.medications.filter((m) => m.id !== req.params.id);
+  if (data.medications.length === before) return res.status(404).json({ error: 'Not found' });
+  saveData(data);
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Appointments
+// ---------------------------------------------------------------------------
+app.get('/api/appointments', (_req, res) => {
+  res.json(data.appointments);
+});
+
+app.post('/api/appointments', (req, res) => {
+  const apt = {
+    ...req.body,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  };
+  data.appointments.push(apt);
+  saveData(data);
+  res.status(201).json(apt);
+});
+
+app.put('/api/appointments/:id', (req, res) => {
+  const idx = data.appointments.findIndex((a) => a.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+
+  data.appointments[idx] = { ...data.appointments[idx], ...req.body, id: req.params.id };
+  saveData(data);
+  res.json(data.appointments[idx]);
+});
+
+app.delete('/api/appointments/:id', (req, res) => {
+  const before = data.appointments.length;
+  data.appointments = data.appointments.filter((a) => a.id !== req.params.id);
+  if (data.appointments.length === before) return res.status(404).json({ error: 'Not found' });
+  saveData(data);
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Tasks
+// ---------------------------------------------------------------------------
+app.get('/api/tasks', (_req, res) => {
+  res.json(data.tasks);
+});
+
+app.post('/api/tasks', (req, res) => {
+  const task = {
+    ...req.body,
+    id: crypto.randomUUID(),
+    completed: false,
+    createdAt: new Date().toISOString(),
+  };
+  data.tasks.push(task);
+  saveData(data);
+  res.status(201).json(task);
+});
+
+app.put('/api/tasks/:id', (req, res) => {
+  const idx = data.tasks.findIndex((t) => t.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: 'Not found' });
+
+  data.tasks[idx] = { ...data.tasks[idx], ...req.body, id: req.params.id };
+  saveData(data);
+  res.json(data.tasks[idx]);
+});
+
+app.delete('/api/tasks/:id', (req, res) => {
+  const before = data.tasks.length;
+  data.tasks = data.tasks.filter((t) => t.id !== req.params.id);
+  if (data.tasks.length === before) return res.status(404).json({ error: 'Not found' });
+  saveData(data);
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
+// Bulk data operations (export / import / clear)
+// ---------------------------------------------------------------------------
+app.get('/api/data/export', (_req, res) => {
+  res.json({
+    familyMembers: data.familyMembers.map((m) => ({ id: m.id, name: m.name, color: m.color })),
+    medications: data.medications,
+    appointments: data.appointments,
+    tasks: data.tasks,
+    exportedAt: new Date().toISOString(),
+    version: '1.0.0',
+  });
+});
+
+app.post('/api/data/import', (req, res) => {
+  const incoming = req.body;
+  if (incoming.familyMembers) data.familyMembers = incoming.familyMembers;
+  if (incoming.medications) data.medications = incoming.medications;
+  if (incoming.appointments) data.appointments = incoming.appointments;
+  if (incoming.tasks) data.tasks = incoming.tasks;
+  saveData(data);
+  res.json({ success: true, message: 'Data imported successfully' });
+});
+
+app.delete('/api/data', (_req, res) => {
+  data = { ...DEFAULT_DATA };
+  saveData(data);
+  res.status(204).send();
+});
+
+// ---------------------------------------------------------------------------
 // Google OAuth routes
+// ---------------------------------------------------------------------------
 app.get('/auth/google', (req, res) => {
-    const { memberId } = req.query;
-    if (!memberId) {
-        return res.status(400).json({ error: 'memberId is required' });
-    }
+  const { memberId } = req.query;
+  if (!memberId) return res.status(400).json({ error: 'memberId is required' });
 
-    const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
-
-    const authorizationUrl = oauth2Client.generateAuthUrl({
-        access_type: 'offline',
-        scope: scopes,
-        state: memberId, // Use state to pass memberId back
-        prompt: 'consent'
-    });
-    res.json({ authorizationUrl });
+  const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
+  const authorizationUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: scopes,
+    state: memberId,
+    prompt: 'consent',
+  });
+  res.json({ authorizationUrl });
 });
 
 app.get('/auth/google/callback', async (req, res) => {
-    const { code, state: memberId } = req.query;
+  const { code, state: memberId } = req.query;
+  if (!code || !memberId) return res.status(400).send('Missing code or memberId');
 
-    if (!code || !memberId) {
-        return res.status(400).send('Missing code or memberId');
-    }
+  try {
+    const { tokens } = await oauth2Client.getToken(code);
+    oauth2Client.setCredentials(tokens);
 
-    try {
-        const { tokens } = await oauth2Client.getToken(code);
-        oauth2Client.setCredentials(tokens);
+    const idx = data.familyMembers.findIndex((m) => m.id === memberId);
+    if (idx === -1) return res.status(404).send('Family member not found');
 
-        const memberIndex = familyMembers.findIndex(m => m.id === memberId);
-        if (memberIndex > -1) {
-            familyMembers[memberIndex].tokens = tokens;
-            saveFamilyMembers();
-            // Redirect back to the frontend, perhaps to the family tab
-            res.redirect(`${process.env.FRONTEND_URL}/family?status=success`);
-        } else {
-            res.status(404).send('Family member not found');
-        }
-    } catch (error) {
-        console.error('Error retrieving access token', error);
-        res.status(500).send('Authentication failed');
-    }
+    data.familyMembers[idx].tokens = tokens;
+    saveData(data);
+    res.redirect(`${process.env.FRONTEND_URL}/family?status=success`);
+  } catch (error) {
+    console.error('Error retrieving access token', error);
+    res.status(500).send('Authentication failed');
+  }
 });
 
-// Route to get calendar events for a specific family member
 app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
-    const { memberId } = req.params;
-    const member = familyMembers.find(m => m.id === memberId);
+  const member = data.familyMembers.find((m) => m.id === req.params.memberId);
+  if (!member || !member.tokens) {
+    return res.status(404).json({ error: 'Family member not found or Google not connected' });
+  }
 
-    if (!member || !member.tokens) {
-        return res.status(404).json({ error: 'Family member not found or Google not connected' });
+  try {
+    oauth2Client.setCredentials(member.tokens);
+    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    const now = new Date();
+    const oneMonthLater = new Date();
+    oneMonthLater.setMonth(now.getMonth() + 1);
+
+    const response = await calendar.events.list({
+      calendarId: 'primary',
+      timeMin: now.toISOString(),
+      timeMax: oneMonthLater.toISOString(),
+      singleEvents: true,
+      orderBy: 'startTime',
+    });
+    res.json(response.data.items);
+  } catch (error) {
+    console.error('Error fetching calendar events:', error.message);
+    if (error.code === 401 || error.code === 403) {
+      const idx = data.familyMembers.findIndex((m) => m.id === req.params.memberId);
+      if (idx > -1) {
+        data.familyMembers[idx].tokens = null;
+        saveData(data);
+      }
+      return res.status(401).json({ error: 'Google authentication expired. Please re-authenticate.' });
     }
-
-    try {
-        oauth2Client.setCredentials(member.tokens);
-        const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-        const now = new Date();
-        const oneMonthLater = new Date();
-        oneMonthLater.setMonth(now.getMonth() + 1);
-
-        const response = await calendar.events.list({
-            calendarId: 'primary',
-            timeMin: now.toISOString(),
-            timeMax: oneMonthLater.toISOString(),
-            singleEvents: true,
-            orderBy: 'startTime',
-        });
-
-        res.json(response.data.items);
-    } catch (error) {
-        console.error('Error fetching calendar events:', error.message);
-        // If tokens are expired or invalid, clear them and prompt re-auth
-        if (error.code === 401 || error.code === 403) {
-            const memberIndex = familyMembers.findIndex(m => m.id === memberId);
-            if (memberIndex > -1) {
-                familyMembers[memberIndex].tokens = null;
-                saveFamilyMembers();
-            }
-            return res.status(401).json({ error: 'Google authentication expired. Please re-authenticate.' });
-        }
-        res.status(500).json({ error: 'Failed to fetch calendar events' });
-    }
+    res.status(500).json({ error: 'Failed to fetch calendar events' });
+  }
 });
 
+// ---------------------------------------------------------------------------
 app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+  console.log(`FamilyDash server running on port ${PORT}`);
 });
