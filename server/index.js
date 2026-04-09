@@ -424,6 +424,12 @@ app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
 });
 
 // ---------------------------------------------------------------------------
-app.listen(PORT, () => {
-  console.log(`FamilyDash server running on port ${PORT}`);
-});
+// Export for testing; start server only when run directly
+// ---------------------------------------------------------------------------
+module.exports = { app, _getData: () => data, _setData: (d) => { data = d; } };
+
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`FamilyDash server running on port ${PORT}`);
+  });
+}
