@@ -94,11 +94,9 @@ export const useFamilyData = () => {
 
   const deleteFamilyMember = useCallback((id) => withErrorHandling(async () => {
     await familyMembersApi.remove(id);
-    setFamilyMembers((prev) => prev.filter((m) => m.id !== id));
-    setMedications((prev) => prev.filter((m) => m.person !== id));
-    setAppointments((prev) => prev.filter((a) => a.person !== id));
-    setTasks((prev) => prev.filter((t) => t.person !== id));
-  })(), [withErrorHandling]);
+    // Server cascade-deletes associated data; refetch to stay in sync
+    await fetchAll();
+  })(), [withErrorHandling, fetchAll]);
 
   // ── Medications ─────────────────────────────────────────────────────
   const addMedication = useCallback((medication) => withErrorHandling(async () => {

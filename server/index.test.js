@@ -168,15 +168,12 @@ describe('Auth', () => {
   });
 
   it('rate limits login attempts', async () => {
-    const attempts = [];
+    let rateLimitedCount = 0;
     for (let i = 0; i < 32; i++) {
-      attempts.push(
-        request(app).post('/auth/login').send({ password: 'wrong' }),
-      );
+      const res = await request(app).post('/auth/login').send({ password: 'wrong' });
+      if (res.status === 429) rateLimitedCount++;
     }
-    const results = await Promise.all(attempts);
-    const rateLimited = results.filter((r) => r.status === 429);
-    expect(rateLimited.length).toBeGreaterThan(0);
+    expect(rateLimitedCount).toBeGreaterThan(0);
   });
 });
 
@@ -492,6 +489,64 @@ describe('Bulk data API', () => {
       .get('/api/family-members')
       .set('Cookie', cookie);
     expect(res.body).toHaveLength(0);
+  });
+
+  it('rejects non-array import fields', async () => {
+    const cookie = await login();
+    const res = await request(app)
+      .post('/api/data/import')
+      .set('Cookie', cookie)
+      .send({ medications: 'not-an-array' });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/array/);
+  });
+
+  it('import filters out entries missing required fields', async () => {
+    const cookie = await login();
+    await request(app)
+      .post('/api/data/import')
+      .set('Cookie', cookie)
+      .send({
+        medications: [
+          { name: 'Valid', person: 'p1', time: '08:00' },
+          { person: 'p1' }, // missing name — should be filtered out
+        ],
+        appointments: [
+          { title: 'Valid Apt', date: '2026-05-01' },
+          { date: '2026-05-01' }, // missing title
+        ],
+        tasks: [
+          { task: 'Valid Task', priority: 'high' },
+          { priority: 'low' }, // missing task
+        ],
+      });
+
+    const meds = await request(app).get('/api/medications').set('Cookie', cookie);
+    expect(meds.body).toHaveLength(1);
+    expect(meds.body[0].name).toBe('Valid');
+
+    const apts = await request(app).get('/api/appointments').set('Cookie', cookie);
+    expect(apts.body).toHaveLength(1);
+    expect(apts.body[0].title).toBe('Valid Apt');
+
+    const tasks = await request(app).get('/api/tasks').set('Cookie', cookie);
+    expect(tasks.body).toHaveLength(1);
+    expect(tasks.body[0].task).toBe('Valid Task');
+  });
+
+  it('import whitelists fields and assigns defaults', async () => {
+    const cookie = await login();
+    await request(app)
+      .post('/api/data/import')
+      .set('Cookie', cookie)
+      .send({
+        medications: [{ name: 'Aspirin', _injected: 'evil' }],
+      });
+
+    const meds = await request(app).get('/api/medications').set('Cookie', cookie);
+    expect(meds.body[0]).not.toHaveProperty('_injected');
+    expect(meds.body[0].taken).toBe(false);
+    expect(meds.body[0].createdAt).toBeDefined();
   });
 
   it('clear works correctly when called twice', async () => {

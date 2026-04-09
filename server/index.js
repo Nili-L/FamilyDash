@@ -456,6 +456,14 @@ app.get('/api/data/export', (_req, res) => {
 
 app.post('/api/data/import', async (req, res) => {
   const incoming = req.body;
+
+  // Validate arrays
+  for (const key of ['familyMembers', 'medications', 'appointments', 'tasks']) {
+    if (incoming[key] !== undefined && !Array.isArray(incoming[key])) {
+      return res.status(400).json({ error: `${key} must be an array` });
+    }
+  }
+
   if (incoming.familyMembers) {
     data.familyMembers = incoming.familyMembers.map((m) => ({
       id: m.id || crypto.randomUUID(),
@@ -464,9 +472,21 @@ app.post('/api/data/import', async (req, res) => {
       tokens: null,
     }));
   }
-  if (incoming.medications) data.medications = incoming.medications;
-  if (incoming.appointments) data.appointments = incoming.appointments;
-  if (incoming.tasks) data.tasks = incoming.tasks;
+  if (incoming.medications) {
+    data.medications = incoming.medications
+      .filter((m) => m && m.name)
+      .map((m) => ({ id: m.id || crypto.randomUUID(), name: m.name, person: m.person || null, time: m.time || null, notes: m.notes || null, taken: !!m.taken, takenAt: m.takenAt || null, createdAt: m.createdAt || new Date().toISOString() }));
+  }
+  if (incoming.appointments) {
+    data.appointments = incoming.appointments
+      .filter((a) => a && a.title)
+      .map((a) => ({ id: a.id || crypto.randomUUID(), title: a.title, person: a.person || null, date: a.date || null, time: a.time || null, location: a.location || null, notes: a.notes || null, createdAt: a.createdAt || new Date().toISOString() }));
+  }
+  if (incoming.tasks) {
+    data.tasks = incoming.tasks
+      .filter((t) => t && t.task)
+      .map((t) => ({ id: t.id || crypto.randomUUID(), task: t.task, person: t.person || null, priority: t.priority || null, notes: t.notes || null, completed: !!t.completed, completedAt: t.completedAt || null, createdAt: t.createdAt || new Date().toISOString() }));
+  }
   await saveData(data);
   res.json({ success: true, message: 'Data imported successfully' });
 });
