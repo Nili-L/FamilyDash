@@ -23,12 +23,20 @@ function App() {
   const [toast, setToast] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   
-  // Check auth on mount + listen for 401 events from the API client
+  // Check auth on mount, poll every 15 min, listen for 401 events
   useEffect(() => {
-    authApi.status().then((s) => setAuthenticated(s.authenticated)).catch(() => setAuthenticated(false));
+    const checkAuth = () => authApi.status().then((s) => {
+      if (!s.authenticated) setAuthenticated(false);
+    }).catch(() => setAuthenticated(false));
+
+    checkAuth();
+    const interval = setInterval(checkAuth, 15 * 60 * 1000);
     const onAuthRequired = () => setAuthenticated(false);
     window.addEventListener('auth:required', onAuthRequired);
-    return () => window.removeEventListener('auth:required', onAuthRequired);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('auth:required', onAuthRequired);
+    };
   }, []);
 
   const handleLogin = async (e) => {
@@ -98,9 +106,10 @@ function App() {
   }, [showSettings]);
   
   const handleImport = async (event) => {
-    const file = event.target.files?.[0];
+    const input = event.target;
+    const file = input.files?.[0];
     if (!file) return;
-    
+
     try {
       const result = await importData(file);
       if (result.success) {
@@ -109,9 +118,9 @@ function App() {
       }
     } catch (error) {
       setImportError(error.message || 'Failed to import data');
+    } finally {
+      input.value = '';
     }
-    
-    event.target.value = '';
   };
   
   const tabs = [
