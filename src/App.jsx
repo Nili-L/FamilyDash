@@ -6,6 +6,7 @@ import TaskManager from './components/TaskManager';
 import FamilyPage from './pages/FamilyPage';
 import AppointmentsPage from './pages/AppointmentsPage';
 import { useFamilyData } from './hooks/useFamilyData';
+import { useFocusTrap } from './hooks/useFocusTrap';
 import { authApi } from './api/client';
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState(null); // null = checking
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const settingsDialogRef = useFocusTrap(showSettings);
   
   // Check auth on mount + listen for 401 events from the API client
   useEffect(() => {
@@ -247,9 +249,15 @@ function App() {
       
       {showSettings && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-md w-full animate-slide-in">
+          <div
+            ref={settingsDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-dialog-title"
+            className="bg-white rounded-lg shadow-xl max-w-md w-full animate-slide-in"
+          >
             <div className="p-6">
-              <h2 className="text-2xl font-semibold mb-4">Settings</h2>
+              <h2 id="settings-dialog-title" className="text-2xl font-semibold mb-4">Settings</h2>
               
               <div className="space-y-4">
                 <div>
