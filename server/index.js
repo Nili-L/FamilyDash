@@ -101,13 +101,15 @@ function saveData(data) {
 let data = loadData();
 
 // ---------------------------------------------------------------------------
-// Google OAuth2 setup
+// Google OAuth2 — per-request client factory (no shared credential state)
 // ---------------------------------------------------------------------------
-const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.GOOGLE_REDIRECT_URI,
-);
+function createOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_REDIRECT_URI,
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Family Members
@@ -305,7 +307,7 @@ app.get('/auth/google', (req, res) => {
   if (!memberId) return res.status(400).json({ error: 'memberId is required' });
 
   const scopes = ['https://www.googleapis.com/auth/calendar.readonly'];
-  const authorizationUrl = oauth2Client.generateAuthUrl({
+  const authorizationUrl = createOAuthClient().generateAuthUrl({
     access_type: 'offline',
     scope: scopes,
     state: memberId,
@@ -319,8 +321,8 @@ app.get('/auth/google/callback', async (req, res) => {
   if (!code || !memberId) return res.status(400).send('Missing code or memberId');
 
   try {
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
+    const client = createOAuthClient();
+    const { tokens } = await client.getToken(code);
 
     const idx = data.familyMembers.findIndex((m) => m.id === memberId);
     if (idx === -1) return res.status(404).send('Family member not found');
@@ -343,8 +345,9 @@ app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
   try {
     const tokens = decryptTokens(member.tokens);
     if (!tokens) return res.status(401).json({ error: 'Failed to decrypt tokens. Please re-authenticate.' });
-    oauth2Client.setCredentials(tokens);
-    const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
+    const client = createOAuthClient();
+    client.setCredentials(tokens);
+    const calendar = google.calendar({ version: 'v3', auth: client });
     const now = new Date();
     const oneMonthLater = new Date();
     oneMonthLater.setMonth(now.getMonth() + 1);
