@@ -1,7 +1,8 @@
 const express = require('express');
 const dotenv = require('dotenv');
 const { google } = require('googleapis');
-const fs = require('fs');
+const fs = require('fs/promises');
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -18,14 +19,53 @@ for (const key of REQUIRED_ENV) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',');
 
 app.use(express.json({ limit: '1mb' }));
 
 // ---------------------------------------------------------------------------
-// Session-based authentication
+// CORS
+// ---------------------------------------------------------------------------
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+  if (req.method === 'OPTIONS') return res.status(204).send();
+  next();
+});
+
+// ---------------------------------------------------------------------------
+// Rate limiting (sliding window per IP)
+// ---------------------------------------------------------------------------
+const rateLimitStore = new Map();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 30; // max login attempts per window
+
+function rateLimit(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress;
+  const now = Date.now();
+  let entry = rateLimitStore.get(ip);
+  if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
+    entry = { windowStart: now, count: 0 };
+    rateLimitStore.set(ip, entry);
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) {
+    return res.status(429).json({ error: 'Too many requests. Try again later.' });
+  }
+  next();
+}
+
+// ---------------------------------------------------------------------------
+// Session-based authentication (with TTL eviction)
 // ---------------------------------------------------------------------------
 const APP_PASSWORD = process.env.APP_PASSWORD;
-const activeSessions = new Set();
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours — matches cookie Max-Age
+const activeSessions = new Map(); // token → { createdAt }
 
 function timingSafeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -49,15 +89,34 @@ function getSessionToken(req) {
   return match ? match[1] : null;
 }
 
+function isSessionValid(token) {
+  const session = activeSessions.get(token);
+  if (!session) return false;
+  if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+    activeSessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
 function requireAuth(req, res, next) {
   const token = getSessionToken(req);
-  if (!token || !activeSessions.has(token)) {
+  if (!token || !isSessionValid(token)) {
     return res.status(401).json({ error: 'Authentication required' });
   }
   next();
 }
 
-app.post('/auth/login', (req, res) => {
+// Periodic session cleanup (every 30 minutes)
+const sessionCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [token, session] of activeSessions) {
+    if (now - session.createdAt > SESSION_TTL_MS) activeSessions.delete(token);
+  }
+}, 30 * 60 * 1000);
+sessionCleanupInterval.unref(); // don't prevent process exit
+
+app.post('/auth/login', rateLimit, (req, res) => {
   if (!APP_PASSWORD) {
     return res.status(500).json({ error: 'APP_PASSWORD not configured on server' });
   }
@@ -66,7 +125,7 @@ app.post('/auth/login', (req, res) => {
     return res.status(401).json({ error: 'Invalid password' });
   }
   const token = crypto.randomBytes(32).toString('hex');
-  activeSessions.add(token);
+  activeSessions.set(token, { createdAt: Date.now() });
   res.setHeader('Set-Cookie', sessionCookie(token, 86400));
   res.json({ success: true });
 });
@@ -80,7 +139,7 @@ app.post('/auth/logout', (req, res) => {
 
 app.get('/auth/status', (req, res) => {
   const token = getSessionToken(req);
-  res.json({ authenticated: !!token && activeSessions.has(token) });
+  res.json({ authenticated: !!token && isSessionValid(token) });
 });
 
 // Protect all /api/* routes
@@ -137,7 +196,7 @@ function decryptTokens(envelope) {
 }
 
 // ---------------------------------------------------------------------------
-// Data persistence — single JSON file for all entity types
+// Data persistence — async JSON file for all entity types
 // ---------------------------------------------------------------------------
 const DATA_FILE = path.join(__dirname, 'data.json');
 
@@ -153,21 +212,21 @@ function freshData() {
 }
 
 function loadData() {
+  // Synchronous on startup only — before server is listening
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
+    if (fsSync.existsSync(DATA_FILE)) {
+      return JSON.parse(fsSync.readFileSync(DATA_FILE, 'utf8'));
     }
   } catch (err) {
     console.error('Error loading data file:', err);
   }
 
-  // Migrate from legacy familyMembers.json if it exists
   const legacyPath = path.join(__dirname, 'familyMembers.json');
   try {
-    if (fs.existsSync(legacyPath)) {
-      const members = JSON.parse(fs.readFileSync(legacyPath, 'utf8'));
+    if (fsSync.existsSync(legacyPath)) {
+      const members = JSON.parse(fsSync.readFileSync(legacyPath, 'utf8'));
       const migrated = { ...DEFAULT_DATA, familyMembers: members };
-      saveData(migrated);
+      fsSync.writeFileSync(DATA_FILE, JSON.stringify(migrated, null, 2), 'utf8');
       return migrated;
     }
   } catch (err) {
@@ -177,8 +236,8 @@ function loadData() {
   return freshData();
 }
 
-function saveData(data) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
+async function saveData(d) {
+  await fs.writeFile(DATA_FILE, JSON.stringify(d, null, 2), 'utf8');
 }
 
 let data = loadData();
@@ -208,17 +267,17 @@ app.get('/api/family-members', (_req, res) => {
   );
 });
 
-app.post('/api/family-members', (req, res) => {
+app.post('/api/family-members', async (req, res) => {
   const { name, color } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
 
   const newMember = { id: crypto.randomUUID(), name, color: color || null, tokens: null };
   data.familyMembers.push(newMember);
-  saveData(data);
+  await saveData(data);
   res.status(201).json({ id: newMember.id, name: newMember.name, color: newMember.color, googleConnected: false });
 });
 
-app.put('/api/family-members/:id', (req, res) => {
+app.put('/api/family-members/:id', async (req, res) => {
   const idx = data.familyMembers.findIndex((m) => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
@@ -228,23 +287,22 @@ app.put('/api/family-members/:id', (req, res) => {
     data.familyMembers[idx].name = name;
   }
   if (color !== undefined) data.familyMembers[idx].color = color;
-  saveData(data);
+  await saveData(data);
 
   const m = data.familyMembers[idx];
   res.json({ id: m.id, name: m.name, color: m.color, googleConnected: !!m.tokens });
 });
 
-app.delete('/api/family-members/:id', (req, res) => {
+app.delete('/api/family-members/:id', async (req, res) => {
   const { id } = req.params;
   const before = data.familyMembers.length;
   data.familyMembers = data.familyMembers.filter((m) => m.id !== id);
   if (data.familyMembers.length === before) return res.status(404).json({ error: 'Not found' });
 
-  // Cascade: remove associated medications, appointments, tasks
   data.medications = data.medications.filter((m) => m.person !== id);
   data.appointments = data.appointments.filter((a) => a.person !== id);
   data.tasks = data.tasks.filter((t) => t.person !== id);
-  saveData(data);
+  await saveData(data);
   res.status(204).send();
 });
 
@@ -255,7 +313,7 @@ app.get('/api/medications', (_req, res) => {
   res.json(data.medications);
 });
 
-app.post('/api/medications', (req, res) => {
+app.post('/api/medications', async (req, res) => {
   const { name, person, time, notes } = req.body;
   if (!name) return res.status(400).json({ error: 'Medication name is required' });
   const med = {
@@ -265,26 +323,26 @@ app.post('/api/medications', (req, res) => {
     createdAt: new Date().toISOString(),
   };
   data.medications.push(med);
-  saveData(data);
+  await saveData(data);
   res.status(201).json(med);
 });
 
-app.put('/api/medications/:id', (req, res) => {
+app.put('/api/medications/:id', async (req, res) => {
   const idx = data.medications.findIndex((m) => m.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { name, person, time, notes, taken, takenAt } = req.body;
   const allowed = { name, person, time, notes, taken, takenAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.medications[idx][k] = allowed[k]; });
-  saveData(data);
+  await saveData(data);
   res.json(data.medications[idx]);
 });
 
-app.delete('/api/medications/:id', (req, res) => {
+app.delete('/api/medications/:id', async (req, res) => {
   const before = data.medications.length;
   data.medications = data.medications.filter((m) => m.id !== req.params.id);
   if (data.medications.length === before) return res.status(404).json({ error: 'Not found' });
-  saveData(data);
+  await saveData(data);
   res.status(204).send();
 });
 
@@ -295,7 +353,7 @@ app.get('/api/appointments', (_req, res) => {
   res.json(data.appointments);
 });
 
-app.post('/api/appointments', (req, res) => {
+app.post('/api/appointments', async (req, res) => {
   const { title, person, date, time, location, notes } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   const apt = {
@@ -305,26 +363,26 @@ app.post('/api/appointments', (req, res) => {
     createdAt: new Date().toISOString(),
   };
   data.appointments.push(apt);
-  saveData(data);
+  await saveData(data);
   res.status(201).json(apt);
 });
 
-app.put('/api/appointments/:id', (req, res) => {
+app.put('/api/appointments/:id', async (req, res) => {
   const idx = data.appointments.findIndex((a) => a.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { title, person, date, time, location, notes } = req.body;
   const allowed = { title, person, date, time, location, notes };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.appointments[idx][k] = allowed[k]; });
-  saveData(data);
+  await saveData(data);
   res.json(data.appointments[idx]);
 });
 
-app.delete('/api/appointments/:id', (req, res) => {
+app.delete('/api/appointments/:id', async (req, res) => {
   const before = data.appointments.length;
   data.appointments = data.appointments.filter((a) => a.id !== req.params.id);
   if (data.appointments.length === before) return res.status(404).json({ error: 'Not found' });
-  saveData(data);
+  await saveData(data);
   res.status(204).send();
 });
 
@@ -335,7 +393,7 @@ app.get('/api/tasks', (_req, res) => {
   res.json(data.tasks);
 });
 
-app.post('/api/tasks', (req, res) => {
+app.post('/api/tasks', async (req, res) => {
   const { task: taskText, person, priority, notes } = req.body;
   if (!taskText) return res.status(400).json({ error: 'Task description is required' });
   const task = {
@@ -345,26 +403,26 @@ app.post('/api/tasks', (req, res) => {
     createdAt: new Date().toISOString(),
   };
   data.tasks.push(task);
-  saveData(data);
+  await saveData(data);
   res.status(201).json(task);
 });
 
-app.put('/api/tasks/:id', (req, res) => {
+app.put('/api/tasks/:id', async (req, res) => {
   const idx = data.tasks.findIndex((t) => t.id === req.params.id);
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { task: taskText, person, priority, notes, completed, completedAt } = req.body;
   const allowed = { task: taskText, person, priority, notes, completed, completedAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.tasks[idx][k] = allowed[k]; });
-  saveData(data);
+  await saveData(data);
   res.json(data.tasks[idx]);
 });
 
-app.delete('/api/tasks/:id', (req, res) => {
+app.delete('/api/tasks/:id', async (req, res) => {
   const before = data.tasks.length;
   data.tasks = data.tasks.filter((t) => t.id !== req.params.id);
   if (data.tasks.length === before) return res.status(404).json({ error: 'Not found' });
-  saveData(data);
+  await saveData(data);
   res.status(204).send();
 });
 
@@ -382,33 +440,32 @@ app.get('/api/data/export', (_req, res) => {
   });
 });
 
-app.post('/api/data/import', (req, res) => {
+app.post('/api/data/import', async (req, res) => {
   const incoming = req.body;
   if (incoming.familyMembers) {
     data.familyMembers = incoming.familyMembers.map((m) => ({
       id: m.id || crypto.randomUUID(),
       name: m.name || 'Unknown',
       color: m.color || null,
-      tokens: null, // Never import tokens
+      tokens: null,
     }));
   }
   if (incoming.medications) data.medications = incoming.medications;
   if (incoming.appointments) data.appointments = incoming.appointments;
   if (incoming.tasks) data.tasks = incoming.tasks;
-  saveData(data);
+  await saveData(data);
   res.json({ success: true, message: 'Data imported successfully' });
 });
 
-app.delete('/api/data', (_req, res) => {
+app.delete('/api/data', async (_req, res) => {
   data = freshData();
-  saveData(data);
+  await saveData(data);
   res.status(204).send();
 });
 
 // ---------------------------------------------------------------------------
 // Google OAuth routes
 // ---------------------------------------------------------------------------
-// Short-lived store for OAuth CSRF tokens (csrf → memberId, expires after 10 min)
 const pendingOAuthFlows = new Map();
 
 app.get('/auth/google', requireAuth, (req, res) => {
@@ -461,7 +518,7 @@ app.get('/auth/google/callback', async (req, res) => {
     if (idx === -1) return res.status(404).send('Family member not found');
 
     data.familyMembers[idx].tokens = encryptTokens(tokens);
-    saveData(data);
+    await saveData(data);
     res.redirect(`${process.env.FRONTEND_URL}/family?status=success`);
   } catch (error) {
     console.error('Error retrieving access token', error);
@@ -492,14 +549,23 @@ app.get('/api/family-members/:memberId/calendar-events', async (req, res) => {
       singleEvents: true,
       orderBy: 'startTime',
     });
-    res.json(response.data.items);
+
+    // Sanitize: only return fields the frontend needs
+    const events = (response.data.items || []).map((e) => ({
+      id: e.id,
+      summary: e.summary || '(No title)',
+      start: e.start,
+      end: e.end,
+      location: e.location || null,
+    }));
+    res.json(events);
   } catch (error) {
     console.error('Error fetching calendar events:', error.message);
     if (error.code === 401 || error.code === 403) {
       const idx = data.familyMembers.findIndex((m) => m.id === req.params.memberId);
       if (idx > -1) {
         data.familyMembers[idx].tokens = null;
-        saveData(data);
+        await saveData(data);
       }
       return res.status(401).json({ error: 'Google authentication expired. Please re-authenticate.' });
     }
@@ -518,7 +584,12 @@ app.use((err, _req, res, _next) => {
 // ---------------------------------------------------------------------------
 // Export for testing; start server only when run directly
 // ---------------------------------------------------------------------------
-module.exports = { app, _getData: () => data, _setData: (d) => { data = d; } };
+module.exports = {
+  app,
+  _getData: () => data,
+  _setData: (d) => { data = d; },
+  _test: { encryptTokens, decryptTokens, timingSafeCompare, rateLimitStore, activeSessions },
+};
 
 if (require.main === module) {
   app.listen(PORT, () => {
