@@ -1,156 +1,82 @@
-# Deployment Guide for Family Dashboard
+# Deployment Guide
 
-This guide provides detailed instructions for deploying the Family Dashboard application to various platforms.
+FamilyDash is a full-stack application (React frontend + Express API server). Both must be running for the app to work.
 
 ## Prerequisites
 
-Before deploying, ensure you have:
-- Built the application successfully with `npm run build`
-- Tested the production build locally with `npm run preview`
-- All environment variables configured (if any)
+- Node.js 18+
+- npm
+- The server environment variables configured (see `server/.env.example`)
 
-## Platform-Specific Deployment
+## Development
 
-### Vercel (Recommended)
-
-Vercel offers the easiest deployment with automatic HTTPS and global CDN.
-
-#### Method 1: Vercel CLI
 ```bash
-# Install Vercel CLI globally
-npm i -g vercel
+# Install dependencies
+npm install
+cd server && npm install && cd ..
 
-# Deploy
-vercel
+# Configure server
+cp server/.env.example server/.env
+# Edit server/.env — set APP_PASSWORD and TOKEN_ENCRYPTION_KEY at minimum
 
-# Follow the prompts:
-# - Link to existing project or create new
-# - Select the `dist` directory
-# - Deploy to production
+# Start both servers
+cd server && node index.js &   # API on port 3001
+npm run dev                     # Frontend on port 5173 (proxies /api to 3001)
 ```
 
-#### Method 2: Git Integration
-1. Push your code to GitHub/GitLab/Bitbucket
-2. Visit [vercel.com](https://vercel.com)
-3. Import your repository
-4. Configure build settings:
-   - Build Command: `npm run build`
-   - Output Directory: `dist`
-5. Deploy
+## Production Deployment
 
-### Netlify
+### Option 1: Single Server (Recommended for Home Use)
 
-#### Method 1: Drag and Drop
-1. Run `npm run build`
-2. Visit [app.netlify.com](https://app.netlify.com)
-3. Drag the `dist` folder to the deployment area
+Run Express to serve both the API and the built frontend.
 
-#### Method 2: Netlify CLI
-```bash
-# Install Netlify CLI
-npm i -g netlify-cli
-
-# Login to Netlify
-netlify login
-
-# Deploy
-netlify deploy --prod --dir=dist
-```
-
-#### Method 3: Git Integration
-1. Connect your Git repository to Netlify
-2. Configure build settings:
-   - Build Command: `npm run build`
-   - Publish Directory: `dist`
-
-### GitHub Pages
-
-1. Install gh-pages package:
-```bash
-npm install --save-dev gh-pages
-```
-
-2. Add to `vite.config.js`:
-```javascript
-export default defineConfig({
-  base: '/family-dashboard/',
-  // ... rest of config
-})
-```
-
-3. Add to `package.json`:
-```json
-{
-  "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
-  }
-}
-```
-
-4. Deploy:
-```bash
-npm run deploy
-```
-
-5. Enable GitHub Pages in repository settings
-
-### AWS S3 + CloudFront
-
-1. Build the project:
+1. Build the frontend:
 ```bash
 npm run build
 ```
 
-2. Create S3 bucket:
+2. Add static file serving to the Express server (or use a reverse proxy):
 ```bash
-aws s3 mb s3://family-dashboard-bucket
+# Start the server
+cd server
+NODE_ENV=production node index.js
 ```
 
-3. Configure bucket for static hosting:
-```bash
-aws s3 website s3://family-dashboard-bucket \
-  --index-document index.html \
-  --error-document index.html
-```
+3. Use a reverse proxy (nginx, Caddy) to:
+   - Serve `dist/` for static files
+   - Proxy `/api/*` and `/auth/*` to `http://localhost:3001`
 
-4. Upload files:
-```bash
-aws s3 sync dist/ s3://family-dashboard-bucket --acl public-read
-```
-
-5. Create CloudFront distribution for HTTPS and CDN
-
-### Docker Deployment
-
-1. Create `Dockerfile`:
-```dockerfile
-FROM node:18-alpine as builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
-
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-```
-
-2. Create `nginx.conf`:
+**Example nginx config:**
 ```nginx
 server {
-    listen 80;
-    server_name localhost;
-    root /usr/share/nginx/html;
+    listen 443 ssl;
+    server_name familydash.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    root /path/to/FamilyDash/dist;
     index index.html;
-    
+
+    # SPA routing — serve index.html for all frontend routes
     location / {
         try_files $uri $uri/ /index.html;
     }
-    
+
+    # Proxy API and auth to Express
+    location /api/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /auth/ {
+        proxy_pass http://127.0.0.1:3001;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Cache static assets
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
         expires 1y;
         add_header Cache-Control "public, immutable";
@@ -158,138 +84,139 @@ server {
 }
 ```
 
+### Option 2: Docker
+
+1. Create `Dockerfile`:
+```dockerfile
+FROM node:18-alpine AS frontend
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM node:18-alpine
+WORKDIR /app
+COPY server/package*.json ./
+RUN npm ci --omit=dev
+COPY server/ .
+COPY --from=frontend /app/dist ./public
+
+EXPOSE 3001
+CMD ["node", "index.js"]
+```
+
+2. Create `docker-compose.yml`:
+```yaml
+version: '3.8'
+services:
+  familydash:
+    build: .
+    ports:
+      - "3001:3001"
+    env_file:
+      - server/.env
+    volumes:
+      - data:/app/data
+    restart: unless-stopped
+
+volumes:
+  data:
+```
+
 3. Build and run:
 ```bash
-docker build -t family-dashboard .
-docker run -p 80:80 family-dashboard
+docker compose up -d
 ```
 
-## Environment Configuration
-
-### Base URL Configuration
-
-If deploying to a subdirectory, update `vite.config.js`:
+**Note:** For the Docker setup, you would need to add static file serving to `server/index.js`:
 ```javascript
-export default defineConfig({
-  base: '/your-subdirectory/',
-  // ... rest of config
-})
+// Add before the error handler, after all API routes
+const serveStatic = require('path');
+app.use(express.static(path.join(__dirname, 'public')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 ```
 
-### Custom Domain Setup
+### Option 3: Separate Hosting
 
-#### Vercel
-1. Go to project settings
-2. Add custom domain
-3. Follow DNS configuration instructions
+Host the frontend on a static host (Vercel, Netlify, GitHub Pages) and the API server separately.
 
-#### Netlify
-1. Go to domain settings
-2. Add custom domain
-3. Configure DNS
+1. Set `CORS_ORIGINS` in `server/.env` to the frontend's origin
+2. Update `FRONTEND_URL` to the frontend's production URL
+3. Update the frontend's API base URL (or configure a proxy)
 
-## Post-Deployment Checklist
-
-- [ ] Verify all pages load correctly
-- [ ] Test data persistence (localStorage)
-- [ ] Check responsive design on mobile
-- [ ] Verify all features work as expected
-- [ ] Test data export/import functionality
-- [ ] Check browser console for errors
-- [ ] Verify HTTPS is enabled
-- [ ] Test performance with Lighthouse
-
-## Continuous Deployment
-
-### GitHub Actions
-
-Create `.github/workflows/deploy.yml`:
-```yaml
-name: Deploy to Production
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: '18'
-        
-    - name: Install dependencies
-      run: npm ci
-      
-    - name: Build
-      run: npm run build
-      
-    - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v20
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.ORG_ID}}
-        vercel-project-id: ${{ secrets.PROJECT_ID}}
+**Frontend (Vercel/Netlify):**
+```bash
+npm run build
+# Deploy the dist/ directory
 ```
 
-## Monitoring
+**API server (VPS, Railway, Render):**
+```bash
+cd server
+NODE_ENV=production node index.js
+```
 
-### Analytics (Optional)
+## Environment Variables
 
-To add analytics, consider privacy-focused options:
-- Plausible
-- Fathom
-- Self-hosted Matomo
+All required for production. See `server/.env.example` for details.
 
-### Error Tracking (Optional)
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_PASSWORD` | Yes | Family login password |
+| `TOKEN_ENCRYPTION_KEY` | Yes | 64-char hex AES key |
+| `GOOGLE_CLIENT_ID` | For Calendar | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | For Calendar | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | For Calendar | Must match Google Cloud Console exactly; use HTTPS in production |
+| `FRONTEND_URL` | Recommended | Frontend origin for OAuth redirects |
+| `CORS_ORIGINS` | Recommended | Comma-separated allowed origins |
+| `NODE_ENV` | Recommended | Set to `production` for Secure cookies |
+| `PORT` | No | Server port (default: 3001) |
 
-For production error tracking:
-- Sentry
-- Rollbar
-- LogRocket
+## Production Checklist
+
+- [ ] `NODE_ENV=production` is set (enables Secure cookie flag)
+- [ ] `APP_PASSWORD` is strong (12+ chars, mixed case, numbers, symbols)
+- [ ] `TOKEN_ENCRYPTION_KEY` is randomly generated and securely stored
+- [ ] HTTPS is configured (required for Secure cookies and OAuth)
+- [ ] `CORS_ORIGINS` is set to the frontend's production origin only
+- [ ] `FRONTEND_URL` is set to the production URL
+- [ ] `GOOGLE_REDIRECT_URI` uses HTTPS and matches Google Cloud Console
+- [ ] `server/data.json` is backed up regularly
+- [ ] `server/.env` is not committed to version control
+- [ ] Server is managed by a process manager (PM2, systemd, Docker)
+- [ ] Tests pass: `npx vitest run`
+
+## Data Backup
+
+All data is stored in `server/data.json`. Back it up regularly:
+
+```bash
+# Manual backup
+cp server/data.json server/data.json.backup-$(date +%Y%m%d)
+
+# Or use the in-app export (Settings > Export Data)
+```
 
 ## Troubleshooting
 
-### Build Fails
-- Check Node.js version (requires 16+)
-- Clear node_modules and reinstall
-- Check for TypeScript errors
+### "Authentication required" on every request
+- Check that the server is running and reachable
+- If behind a proxy, ensure cookies are forwarded (no cookie stripping)
+- If using HTTPS, make sure `NODE_ENV=production` so the Secure flag is set
 
-### 404 Errors on Routes
-- Ensure SPA routing is configured
-- Check base URL configuration
+### Google Calendar not connecting
+- Verify all 4 Google OAuth env vars are set
+- `GOOGLE_REDIRECT_URI` must exactly match the authorized redirect URI in Google Cloud Console
+- In production, the redirect URI must use HTTPS
 
-### localStorage Not Working
-- Check browser security settings
-- Ensure HTTPS is enabled
-- Test in incognito mode
+### Data not persisting
+- Check file permissions on `server/data.json` and its directory
+- Check disk space
+- Server logs will show `ENOSPC` or `EACCES` errors
 
-### Performance Issues
-- Enable gzip compression
-- Configure proper caching headers
-- Use CDN for static assets
-- Optimize images
-
-## Security Considerations
-
-1. Always use HTTPS in production
-2. Configure Content Security Policy headers
-3. Keep dependencies updated
-4. Use environment variables for sensitive data
-5. Configure CORS properly if using APIs
-
-## Backup Recommendations
-
-Since data is stored in localStorage:
-1. Remind users to export data regularly
-2. Consider implementing auto-backup reminders
-3. Test data import/export thoroughly
-
----
-
-For deployment support, please check the [Issues](https://github.com/yourusername/family-dashboard/issues) page or create a new issue with the deployment platform you're using.
+### Build failures
+- Requires Node.js 18+
+- Clear `node_modules` and reinstall: `rm -rf node_modules && npm install`
