@@ -200,7 +200,6 @@ export const useFamilyData = () => {
   }, [fetchAll]);
 
   const clearAllData = useCallback(() => withErrorHandling(async () => {
-    if (!window.confirm('Are you sure you want to clear all data? This action cannot be undone.')) return;
     await dataApi.clearAll();
     setFamilyMembers([]);
     setMedications([]);

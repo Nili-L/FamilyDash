@@ -254,6 +254,14 @@ async function saveData(d) {
 let data = loadData();
 
 // ---------------------------------------------------------------------------
+// Input sanitization — strip angle brackets and trim
+// ---------------------------------------------------------------------------
+function sanitize(val) {
+  if (typeof val !== 'string') return val;
+  return val.trim().replace(/[<>]/g, '').slice(0, 500);
+}
+
+// ---------------------------------------------------------------------------
 // Google OAuth2 — per-request client factory (no shared credential state)
 // ---------------------------------------------------------------------------
 function createOAuthClient() {
@@ -282,7 +290,7 @@ app.post('/api/family-members', async (req, res) => {
   const { name, color } = req.body;
   if (!name) return res.status(400).json({ error: 'Name is required' });
 
-  const newMember = { id: crypto.randomUUID(), name, color: color || null, tokens: null };
+  const newMember = { id: crypto.randomUUID(), name: sanitize(name), color: color || null, tokens: null };
   data.familyMembers.push(newMember);
   await saveData(data);
   res.status(201).json({ id: newMember.id, name: newMember.name, color: newMember.color, googleConnected: false });
@@ -295,7 +303,7 @@ app.put('/api/family-members/:id', async (req, res) => {
   const { name, color } = req.body;
   if (name !== undefined) {
     if (!name) return res.status(400).json({ error: 'Name cannot be empty' });
-    data.familyMembers[idx].name = name;
+    data.familyMembers[idx].name = sanitize(name);
   }
   if (color !== undefined) data.familyMembers[idx].color = color;
   await saveData(data);
@@ -328,7 +336,7 @@ app.post('/api/medications', async (req, res) => {
   const { name, person, time, notes } = req.body;
   if (!name) return res.status(400).json({ error: 'Medication name is required' });
   const med = {
-    name, person: person || null, time: time || null, notes: notes || null,
+    name: sanitize(name), person: person || null, time: time || null, notes: sanitize(notes) || null,
     id: crypto.randomUUID(),
     taken: false,
     createdAt: new Date().toISOString(),
@@ -344,7 +352,7 @@ app.put('/api/medications/:id', async (req, res) => {
 
   const { name, person, time, notes, taken, takenAt } = req.body;
   if (name !== undefined && !name) return res.status(400).json({ error: 'Medication name cannot be empty' });
-  const allowed = { name, person, time, notes, taken, takenAt };
+  const allowed = { name: sanitize(name), person, time, notes: sanitize(notes), taken, takenAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.medications[idx][k] = allowed[k]; });
   await saveData(data);
   res.json(data.medications[idx]);
@@ -369,8 +377,8 @@ app.post('/api/appointments', async (req, res) => {
   const { title, person, date, time, location, notes } = req.body;
   if (!title) return res.status(400).json({ error: 'Title is required' });
   const apt = {
-    title, person: person || null, date: date || null, time: time || null,
-    location: location || null, notes: notes || null,
+    title: sanitize(title), person: person || null, date: date || null, time: time || null,
+    location: sanitize(location) || null, notes: sanitize(notes) || null,
     id: crypto.randomUUID(),
     createdAt: new Date().toISOString(),
   };
@@ -385,7 +393,7 @@ app.put('/api/appointments/:id', async (req, res) => {
 
   const { title, person, date, time, location, notes } = req.body;
   if (title !== undefined && !title) return res.status(400).json({ error: 'Title cannot be empty' });
-  const allowed = { title, person, date, time, location, notes };
+  const allowed = { title: sanitize(title), person, date, time, location: sanitize(location), notes: sanitize(notes) };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.appointments[idx][k] = allowed[k]; });
   await saveData(data);
   res.json(data.appointments[idx]);
@@ -410,7 +418,7 @@ app.post('/api/tasks', async (req, res) => {
   const { task: taskText, person, priority, notes } = req.body;
   if (!taskText) return res.status(400).json({ error: 'Task description is required' });
   const task = {
-    task: taskText, person: person || null, priority: priority || null, notes: notes || null,
+    task: sanitize(taskText), person: person || null, priority: priority || null, notes: sanitize(notes) || null,
     id: crypto.randomUUID(),
     completed: false,
     createdAt: new Date().toISOString(),
@@ -426,7 +434,7 @@ app.put('/api/tasks/:id', async (req, res) => {
 
   const { task: taskText, person, priority, notes, completed, completedAt } = req.body;
   if (taskText !== undefined && !taskText) return res.status(400).json({ error: 'Task description cannot be empty' });
-  const allowed = { task: taskText, person, priority, notes, completed, completedAt };
+  const allowed = { task: sanitize(taskText), person, priority, notes: sanitize(notes), completed, completedAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.tasks[idx][k] = allowed[k]; });
   await saveData(data);
   res.json(data.tasks[idx]);

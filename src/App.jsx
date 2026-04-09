@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Home, Users, Pill, Calendar, CheckSquare, Settings, Download, Upload, AlertCircle, LogOut } from 'lucide-react';
-import DashboardOverview from './components/DashboardOverview';
-import MedicationTracker from './components/MedicationTracker';
-import TaskManager from './components/TaskManager';
-import FamilyPage from './pages/FamilyPage';
-import AppointmentsPage from './pages/AppointmentsPage';
+
+const DashboardOverview = lazy(() => import('./components/DashboardOverview'));
+const MedicationTracker = lazy(() => import('./components/MedicationTracker'));
+const TaskManager = lazy(() => import('./components/TaskManager'));
+const FamilyPage = lazy(() => import('./pages/FamilyPage'));
+const AppointmentsPage = lazy(() => import('./pages/AppointmentsPage'));
 import { useFamilyData } from './hooks/useFamilyData';
 import { useFocusTrap } from './hooks/useFocusTrap';
 import { authApi } from './api/client';
+import Toast from './components/Toast';
+import ConfirmDialog from './components/ConfirmDialog';
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
@@ -17,6 +20,8 @@ function App() {
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const settingsDialogRef = useFocusTrap(showSettings);
+  const [toast, setToast] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
   
   // Check auth on mount + listen for 401 events from the API client
   useEffect(() => {
@@ -74,7 +79,9 @@ function App() {
     updateSettings,
     exportData,
     importData,
-    clearAllData
+    clearAllData,
+    loading,
+    error,
   } = useFamilyData();
 
   useEffect(() => {
@@ -98,7 +105,7 @@ function App() {
       const result = await importData(file);
       if (result.success) {
         setImportError('');
-        alert('Data imported successfully!');
+        setToast({ message: 'Data imported successfully!', type: 'success' });
       }
     } catch (error) {
       setImportError(error.message || 'Failed to import data');
@@ -207,18 +214,23 @@ function App() {
               <h1 className="text-xl font-bold text-primary-600 hidden sm:block">
                 Family Dashboard
               </h1>
-              <div className="flex space-x-1">
+              <div className="flex space-x-1" role="tablist" aria-label="Main navigation">
                 {tabs.map((tab) => {
                   const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
                   return (
                     <button
                       key={tab.id}
+                      role="tab"
+                      aria-selected={isActive}
+                      aria-controls={`tabpanel-${tab.id}`}
                       onClick={() => setActiveTab(tab.id)}
                       className={`inline-flex items-center px-3 py-2 border-b-2 text-sm font-medium transition-colors ${
-                        activeTab === tab.id
+                        isActive
                           ? 'border-primary-500 text-primary-600'
                           : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
+                      aria-label={tab.name}
                     >
                       <Icon className="w-4 h-4 mr-2" />
                       <span className="hidden sm:inline">{tab.name}</span>
@@ -248,8 +260,23 @@ function App() {
         </div>
       </nav>
       
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {renderContent()}
+      <main id={`tabpanel-${activeTab}`} role="tabpanel" aria-label={activeTab} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700 text-sm" role="alert">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{error}</span>
+          </div>
+        )}
+        {loading ? (
+          <div className="flex items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500" />
+            <span className="ml-3 text-gray-500">Loading...</span>
+          </div>
+        ) : (
+          <Suspense fallback={<div className="flex items-center justify-center py-20"><span className="text-gray-500">Loading...</span></div>}>
+            {renderContent()}
+          </Suspense>
+        )}
       </main>
       
       {showSettings && (
@@ -295,7 +322,10 @@ function App() {
                     )}
                     
                     <button
-                      onClick={clearAllData}
+                      onClick={() => setConfirmAction({
+                        message: 'Are you sure you want to clear all data? This action cannot be undone.',
+                        onConfirm: () => { clearAllData(); setConfirmAction(null); },
+                      })}
                       className="btn btn-danger w-full py-2"
                     >
                       Clear All Data
@@ -333,6 +363,20 @@ function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmAction && (
+        <ConfirmDialog
+          message={confirmAction.message}
+          onConfirm={confirmAction.onConfirm}
+          onCancel={() => setConfirmAction(null)}
+          confirmText="Delete"
+          danger
+        />
+      )}
+
+      {toast && (
+        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
       )}
     </div>
   );

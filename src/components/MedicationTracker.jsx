@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Pill, Plus, Check, X, Clock, AlertCircle } from 'lucide-react';
 import AddItemForm from './AddItemForm';
+import ConfirmDialog from './ConfirmDialog';
 import { formatTime, getCurrentDate, isOverdue } from '../utils/dateHelpers';
 import { validateMedication } from '../utils/dataValidation';
 import { getTimeSlots } from '../utils/dateHelpers';
@@ -18,6 +19,7 @@ const MedicationTracker = ({
   const [editingMedication, setEditingMedication] = useState(null);
   const [errors, setErrors] = useState({});
   const [filter, setFilter] = useState('all'); // all, today, overdue
+  const [confirmDelete, setConfirmDelete] = useState(null);
   
   const today = getCurrentDate();
   const timeSlots = useMemo(() => getTimeSlots(15), []);
@@ -137,12 +139,13 @@ const MedicationTracker = ({
         </div>
       ) : (
         <>
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2 mb-4" role="group" aria-label="Medication filters">
             <button
               onClick={() => setFilter('all')}
+              aria-pressed={filter === 'all'}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'all' 
-                  ? 'bg-primary-100 text-primary-700' 
+                filter === 'all'
+                  ? 'bg-primary-100 text-primary-700'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -150,9 +153,10 @@ const MedicationTracker = ({
             </button>
             <button
               onClick={() => setFilter('today')}
+              aria-pressed={filter === 'today'}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'today' 
-                  ? 'bg-primary-100 text-primary-700' 
+                filter === 'today'
+                  ? 'bg-primary-100 text-primary-700'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -160,9 +164,10 @@ const MedicationTracker = ({
             </button>
             <button
               onClick={() => setFilter('overdue')}
+              aria-pressed={filter === 'overdue'}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                filter === 'overdue' 
-                  ? 'bg-danger-100 text-danger-700' 
+                filter === 'overdue'
+                  ? 'bg-danger-100 text-danger-700'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
@@ -257,11 +262,7 @@ const MedicationTracker = ({
                         Edit
                       </button>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`Delete ${medication.name}?`)) {
-                            onDelete(medication.id);
-                          }
-                        }}
+                        onClick={() => setConfirmDelete(medication)}
                         className="text-sm text-danger-600 hover:text-danger-700"
                       >
                         Delete
@@ -288,6 +289,16 @@ const MedicationTracker = ({
         fields={fields}
         submitText={editingMedication ? 'Update' : 'Add'}
       />
+
+      {confirmDelete && (
+        <ConfirmDialog
+          message={`Delete ${confirmDelete.name}?`}
+          confirmText="Delete"
+          danger
+          onConfirm={() => { onDelete(confirmDelete.id); setConfirmDelete(null); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 };

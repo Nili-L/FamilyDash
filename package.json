@@ -6,6 +6,9 @@
   "description": "A comprehensive family management dashboard for families with special needs children",
   "author": "Anny Levine",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "keywords": [
     "family",
     "dashboard",

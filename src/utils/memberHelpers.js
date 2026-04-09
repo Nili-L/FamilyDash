@@ -1,5 +1,5 @@
 export const getMemberById = (personId, familyMembers) => {
-  const member = familyMembers.find(m => m.id === parseInt(personId));
+  const member = familyMembers.find(m => m.id === personId);
   return {
     name: member?.name || 'Unknown',
     color: member?.color || '#6b7280',
