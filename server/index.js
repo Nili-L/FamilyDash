@@ -19,7 +19,7 @@ for (const key of REQUIRED_ENV) {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
-const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',');
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGINS || 'http://localhost:5173').split(',').map((o) => o.trim());
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -44,6 +44,15 @@ app.use((req, res, next) => {
 const rateLimitStore = new Map();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
 const RATE_LIMIT_MAX = 30; // max login attempts per window
+
+// Periodic rate limit cleanup
+const rateLimitCleanupInterval = setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of rateLimitStore) {
+    if (now - entry.windowStart > RATE_LIMIT_WINDOW_MS) rateLimitStore.delete(ip);
+  }
+}, RATE_LIMIT_WINDOW_MS);
+rateLimitCleanupInterval.unref();
 
 function rateLimit(req, res, next) {
   const ip = req.ip || req.socket.remoteAddress;
@@ -236,8 +245,10 @@ function loadData() {
   return freshData();
 }
 
+let saveQueue = Promise.resolve();
 async function saveData(d) {
-  await fs.writeFile(DATA_FILE, JSON.stringify(d, null, 2), 'utf8');
+  saveQueue = saveQueue.then(() => fs.writeFile(DATA_FILE, JSON.stringify(d, null, 2), 'utf8'));
+  return saveQueue;
 }
 
 let data = loadData();
@@ -332,6 +343,7 @@ app.put('/api/medications/:id', async (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { name, person, time, notes, taken, takenAt } = req.body;
+  if (name !== undefined && !name) return res.status(400).json({ error: 'Medication name cannot be empty' });
   const allowed = { name, person, time, notes, taken, takenAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.medications[idx][k] = allowed[k]; });
   await saveData(data);
@@ -372,6 +384,7 @@ app.put('/api/appointments/:id', async (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { title, person, date, time, location, notes } = req.body;
+  if (title !== undefined && !title) return res.status(400).json({ error: 'Title cannot be empty' });
   const allowed = { title, person, date, time, location, notes };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.appointments[idx][k] = allowed[k]; });
   await saveData(data);
@@ -412,6 +425,7 @@ app.put('/api/tasks/:id', async (req, res) => {
   if (idx === -1) return res.status(404).json({ error: 'Not found' });
 
   const { task: taskText, person, priority, notes, completed, completedAt } = req.body;
+  if (taskText !== undefined && !taskText) return res.status(400).json({ error: 'Task description cannot be empty' });
   const allowed = { task: taskText, person, priority, notes, completed, completedAt };
   Object.keys(allowed).forEach((k) => { if (allowed[k] !== undefined) data.tasks[idx][k] = allowed[k]; });
   await saveData(data);
@@ -519,7 +533,7 @@ app.get('/auth/google/callback', async (req, res) => {
 
     data.familyMembers[idx].tokens = encryptTokens(tokens);
     await saveData(data);
-    res.redirect(`${process.env.FRONTEND_URL}/family?status=success`);
+    res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/family?status=success`);
   } catch (error) {
     console.error('Error retrieving access token', error);
     res.status(500).send('Authentication failed');

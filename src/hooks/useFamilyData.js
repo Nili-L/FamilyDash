@@ -182,6 +182,7 @@ export const useFamilyData = () => {
   })(), [withErrorHandling]);
 
   const importData = useCallback(async (file) => {
+    setError(null);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = async (e) => {
