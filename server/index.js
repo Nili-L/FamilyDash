@@ -247,7 +247,11 @@ function loadData() {
 
 let saveQueue = Promise.resolve();
 async function saveData(d) {
-  saveQueue = saveQueue.then(() => fs.writeFile(DATA_FILE, JSON.stringify(d, null, 2), 'utf8'));
+  saveQueue = saveQueue.then(async () => {
+    const tmp = DATA_FILE + '.tmp';
+    await fs.writeFile(tmp, JSON.stringify(d, null, 2), 'utf8');
+    await fs.rename(tmp, DATA_FILE);
+  });
   return saveQueue;
 }
 
