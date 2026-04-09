@@ -1,8 +1,15 @@
+// Auth-aware fetch wrapper. Fires a custom event on 401 so the app can
+// show the login screen without every component needing to handle it.
 async function api(url, options = {}) {
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
+
+  if (res.status === 401) {
+    window.dispatchEvent(new CustomEvent('auth:required'));
+    throw new Error('Authentication required');
+  }
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
@@ -12,6 +19,15 @@ async function api(url, options = {}) {
   if (res.status === 204) return null;
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Auth
+// ---------------------------------------------------------------------------
+export const authApi = {
+  login: (password) => api('/auth/login', { method: 'POST', body: JSON.stringify({ password }) }),
+  logout: () => api('/auth/logout', { method: 'POST' }),
+  status: () => fetch('/auth/status').then((r) => r.json()),
+};
 
 // ---------------------------------------------------------------------------
 // Family Members

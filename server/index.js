@@ -13,6 +13,55 @@ const PORT = process.env.PORT || 3001;
 app.use(express.json());
 
 // ---------------------------------------------------------------------------
+// Session-based authentication
+// ---------------------------------------------------------------------------
+const APP_PASSWORD = process.env.APP_PASSWORD;
+const activeSessions = new Set();
+
+function getSessionToken(req) {
+  const cookies = req.headers.cookie || '';
+  const match = cookies.match(/session=([^;]+)/);
+  return match ? match[1] : null;
+}
+
+function requireAuth(req, res, next) {
+  const token = getSessionToken(req);
+  if (!token || !activeSessions.has(token)) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+  next();
+}
+
+app.post('/auth/login', (req, res) => {
+  if (!APP_PASSWORD) {
+    return res.status(500).json({ error: 'APP_PASSWORD not configured on server' });
+  }
+  const { password } = req.body;
+  if (!password || password !== APP_PASSWORD) {
+    return res.status(401).json({ error: 'Invalid password' });
+  }
+  const token = crypto.randomBytes(32).toString('hex');
+  activeSessions.add(token);
+  res.setHeader('Set-Cookie', `session=${token}; HttpOnly; SameSite=Strict; Path=/; Max-Age=86400`);
+  res.json({ success: true });
+});
+
+app.post('/auth/logout', (req, res) => {
+  const token = getSessionToken(req);
+  if (token) activeSessions.delete(token);
+  res.setHeader('Set-Cookie', 'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');
+  res.json({ success: true });
+});
+
+app.get('/auth/status', (req, res) => {
+  const token = getSessionToken(req);
+  res.json({ authenticated: !!token && activeSessions.has(token) });
+});
+
+// Protect all /api/* routes
+app.use('/api', requireAuth);
+
+// ---------------------------------------------------------------------------
 // Token encryption (AES-256-GCM) — tokens are never stored in plaintext
 // ---------------------------------------------------------------------------
 const ENCRYPTION_KEY = process.env.TOKEN_ENCRYPTION_KEY; // 64-char hex string (32 bytes)
