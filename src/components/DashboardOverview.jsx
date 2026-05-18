@@ -1,18 +1,20 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, Pill, CheckSquare, User, AlertCircle, Flag } from 'lucide-react';
-import { formatDate, formatTime, getCurrentDate, getCurrentTime, isOverdue, getDaysUntil } from '../utils/dateHelpers';
+import { Calendar, Pill, CheckSquare, User, Flag } from 'lucide-react';
+import { formatDate, formatTime, getCurrentDate, isOverdue, getDaysUntil } from '../utils/dateHelpers';
+import { getMemberById } from '../utils/memberHelpers';
+import { getPriorityClass } from '../utils/priorityHelpers';
 
-const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) => {
-  const [currentTime, setCurrentTime] = useState(new Date());
-  const today = getCurrentDate();
-  
+function LiveClock() {
+  const [now, setNow] = useState(new Date());
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-    
+    const timer = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+  return <>{formatDate(now)} &bull; {now.toLocaleTimeString()}</>;
+}
+
+const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) => {
+  const today = getCurrentDate();
   
   const todaysMedications = useMemo(() => {
     return medications
@@ -23,15 +25,15 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
   const todaysAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date === today)
-      .sort((a, b) => a.time.localeCompare(b.time));
+      .sort((a, b) => (a.time || '').localeCompare(b.time || ''));
   }, [appointments, today]);
-  
+
   const upcomingAppointments = useMemo(() => {
     return appointments
       .filter(apt => apt.date > today)
       .sort((a, b) => {
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
-        return a.time.localeCompare(b.time);
+        if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
+        return (a.time || '').localeCompare(b.time || '');
       })
       .slice(0, 3);
   }, [appointments, today]);
@@ -49,27 +51,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
     return todaysMedications.filter(med => isOverdue(today, med.time));
   }, [todaysMedications, today]);
   
-  const getMemberInfo = (personId) => {
-    const member = familyMembers.find(m => m.id === parseInt(personId));
-    return {
-      name: member?.name || 'Unknown',
-      color: member?.color || '#6b7280',
-      initial: member?.name?.charAt(0).toUpperCase() || '?'
-    };
-  };
-  
-  const getPriorityClass = (priority) => {
-    switch (priority) {
-      case 'high':
-        return 'bg-danger-100 text-danger-800 border-danger-300';
-      case 'medium':
-        return 'bg-warning-100 text-warning-800 border-warning-300';
-      case 'low':
-        return 'bg-success-100 text-success-800 border-success-300';
-      default:
-        return '';
-    }
-  };
+  const getMemberInfo = (personId) => getMemberById(personId, familyMembers);
   
   if (familyMembers.length === 0) {
     return (
@@ -77,7 +59,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
         <div className="text-center">
           <h1 className="text-3xl font-bold mb-2">Family Dashboard</h1>
           <p className="text-gray-600">
-            {formatDate(currentTime)} • {currentTime.toLocaleTimeString()}
+            <LiveClock />
           </p>
         </div>
         
@@ -85,10 +67,10 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
           <User className="w-20 h-20 text-gray-300 mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-gray-700 mb-2">Welcome to Family Dashboard!</h2>
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
-            Start by adding your family members to unlock all features and begin managing your family's daily activities.
+            Start by adding your family members to unlock all features and begin managing your family&apos;s daily activities.
           </p>
           <p className="text-sm text-gray-400">
-            Navigate to the "Family" tab to add your first family member.
+            Navigate to the &quot;Family&quot; tab to add your first family member.
           </p>
         </div>
       </div>
@@ -100,7 +82,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">Family Dashboard</h1>
         <p className="text-gray-600">
-          {formatDate(currentTime)} • {currentTime.toLocaleTimeString()}
+          <LiveClock />
         </p>
       </div>
       
@@ -136,7 +118,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Pill className="w-5 h-5 text-primary-600" />
-              <h3 className="font-medium">Today's Meds</h3>
+              <h3 className="font-medium">Today&apos;s Meds</h3>
             </div>
             <span className="text-2xl font-bold text-primary-600">{todaysMedications.length}</span>
           </div>
@@ -159,7 +141,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
             <span className="text-2xl font-bold text-primary-600">{todaysAppointments.length}</span>
           </div>
           <p className="text-sm text-gray-500">
-            Today's appointments
+            Today&apos;s appointments
           </p>
           <p className="text-sm text-gray-500">
             {upcomingAppointments.length} upcoming
@@ -238,7 +220,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-primary-600" />
-            <h2 className="text-xl font-semibold">Today's Schedule</h2>
+            <h2 className="text-xl font-semibold">Today&apos;s Schedule</h2>
           </div>
           
           {todaysAppointments.length === 0 && upcomingAppointments.length === 0 ? (

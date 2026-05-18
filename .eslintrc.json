@@ -32,5 +32,17 @@
     "react": {
       "version": "detect"
     }
-  }
+  },
+  "overrides": [
+    {
+      "files": ["server/**/*.js"],
+      "excludedFiles": ["server/**/*.test.js", "server/**/*.config.js"],
+      "env": { "node": true, "browser": false },
+      "parserOptions": { "sourceType": "commonjs" }
+    },
+    {
+      "files": ["**/*.test.js", "**/*.test.jsx"],
+      "env": { "node": true }
+    }
+  ]
 }

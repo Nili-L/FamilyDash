@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { CheckSquare, Plus, Check, AlertCircle, Flag } from 'lucide-react';
 import AddItemForm from './AddItemForm';
+import ConfirmDialog from './ConfirmDialog';
 import { validateTask } from '../utils/dataValidation';
 import { getMemberColor, getMemberName } from '../utils/memberHelpers';
 import { getPriorityClass, PRIORITY_ORDER } from '../utils/priorityHelpers';
@@ -18,6 +19,7 @@ const TaskManager = ({
   const [errors, setErrors] = useState({});
   const [filter, setFilter] = useState('active'); // all, active, completed
   const [priorityFilter, setPriorityFilter] = useState('all'); // all, high, medium, low
+  const [confirmDelete, setConfirmDelete] = useState(null);
   
   const filteredTasks = useMemo(() => {
     let filtered = [...tasks];
@@ -175,12 +177,13 @@ const TaskManager = ({
           )}
           
           <div className="flex flex-wrap gap-2 mb-4">
-            <div className="flex gap-2">
+            <div className="flex gap-2" role="group" aria-label="Status filters">
               <button
                 onClick={() => setFilter('active')}
+                aria-pressed={filter === 'active'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  filter === 'active' 
-                    ? 'bg-primary-100 text-primary-700' 
+                  filter === 'active'
+                    ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -188,9 +191,10 @@ const TaskManager = ({
               </button>
               <button
                 onClick={() => setFilter('completed')}
+                aria-pressed={filter === 'completed'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  filter === 'completed' 
-                    ? 'bg-primary-100 text-primary-700' 
+                  filter === 'completed'
+                    ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -198,22 +202,24 @@ const TaskManager = ({
               </button>
               <button
                 onClick={() => setFilter('all')}
+                aria-pressed={filter === 'all'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  filter === 'all' 
-                    ? 'bg-primary-100 text-primary-700' 
+                  filter === 'all'
+                    ? 'bg-primary-100 text-primary-700'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
                 All
               </button>
             </div>
-            
-            <div className="border-l pl-2 flex gap-2">
+
+            <div className="border-l pl-2 flex gap-2" role="group" aria-label="Priority filters">
               <button
                 onClick={() => setPriorityFilter('all')}
+                aria-pressed={priorityFilter === 'all'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  priorityFilter === 'all' 
-                    ? 'bg-gray-600 text-white' 
+                  priorityFilter === 'all'
+                    ? 'bg-gray-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
@@ -221,9 +227,10 @@ const TaskManager = ({
               </button>
               <button
                 onClick={() => setPriorityFilter('high')}
+                aria-pressed={priorityFilter === 'high'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  priorityFilter === 'high' 
-                    ? 'bg-danger-600 text-white' 
+                  priorityFilter === 'high'
+                    ? 'bg-danger-600 text-white'
                     : 'bg-danger-100 text-danger-700 hover:bg-danger-200'
                 }`}
               >
@@ -231,9 +238,10 @@ const TaskManager = ({
               </button>
               <button
                 onClick={() => setPriorityFilter('medium')}
+                aria-pressed={priorityFilter === 'medium'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  priorityFilter === 'medium' 
-                    ? 'bg-warning-600 text-white' 
+                  priorityFilter === 'medium'
+                    ? 'bg-warning-600 text-white'
                     : 'bg-warning-100 text-warning-700 hover:bg-warning-200'
                 }`}
               >
@@ -241,9 +249,10 @@ const TaskManager = ({
               </button>
               <button
                 onClick={() => setPriorityFilter('low')}
+                aria-pressed={priorityFilter === 'low'}
                 className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                  priorityFilter === 'low' 
-                    ? 'bg-success-600 text-white' 
+                  priorityFilter === 'low'
+                    ? 'bg-success-600 text-white'
                     : 'bg-success-100 text-success-700 hover:bg-success-200'
                 }`}
               >
@@ -321,11 +330,7 @@ const TaskManager = ({
                             Edit
                           </button>
                           <button
-                            onClick={() => {
-                              if (window.confirm(`Delete task "${task.task}"?`)) {
-                                onDelete(task.id);
-                              }
-                            }}
+                            onClick={() => setConfirmDelete(task)}
                             className="text-sm text-danger-600 hover:text-danger-700"
                           >
                             Delete
@@ -342,6 +347,7 @@ const TaskManager = ({
       )}
       
       <AddItemForm
+        key={editingTask?.id ?? 'new'}
         isOpen={isFormOpen}
         onClose={() => {
           setIsFormOpen(false);
@@ -353,6 +359,16 @@ const TaskManager = ({
         fields={fields}
         submitText={editingTask ? 'Update' : 'Add'}
       />
+
+      {confirmDelete && (
+        <ConfirmDialog
+          message={`Delete task "${confirmDelete.task}"?`}
+          confirmText="Delete"
+          danger
+          onConfirm={() => { onDelete(confirmDelete.id); setConfirmDelete(null); }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 };

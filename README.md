@@ -1,9 +1,10 @@
 # Family Dashboard
 
-A comprehensive family management dashboard designed specifically for families with special needs children. This production-ready React application helps manage medications, appointments, daily tasks, and family member information all in one place.
+A family management dashboard designed for families with special needs children. Track medications, appointments, daily tasks, and family members — with Google Calendar integration, encrypted data storage, and session-based authentication.
 
 ![Family Dashboard](https://img.shields.io/badge/version-1.0.0-blue.svg)
 ![React](https://img.shields.io/badge/React-18.2.0-61dafb.svg)
+![Express](https://img.shields.io/badge/Express-5.1.0-000.svg)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind-3.3.3-38bdf8.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -11,231 +12,196 @@ A comprehensive family management dashboard designed specifically for families w
 
 ### Core Functionality
 
-- **Family Member Management** - Add, edit, and remove family members with custom color themes
-- **Medication Tracking** - Schedule medications, mark as taken, and receive visual reminders for overdue doses
-- **Appointment Management** - Schedule and track medical/therapy appointments with location details
-- **Daily Task Management** - Create and track daily routines and therapy tasks with priority levels
-- **Dashboard Overview** - Get a comprehensive view of today's activities at a glance
-- **Real-time Updates** - Live clock and automatic status updates
-- **Data Persistence** - All data saved locally using localStorage
+- **Family Member Management** — Add, edit, and remove family members with custom color themes
+- **Medication Tracking** — Schedule medications, mark as taken, overdue alerts
+- **Appointment Management** — Schedule and track appointments with dates, times, and locations
+- **Daily Task Management** — Create and track tasks with priority levels (high/medium/low)
+- **Dashboard Overview** — Today's medications, appointments, and priority tasks at a glance
+- **Google Calendar Integration** — Connect family members' Google Calendars via OAuth
+- **Data Export/Import** — Backup and restore all data as JSON
 
-### Special Features for Special Needs Families
+### Security
 
-- Visual schedules with color-coded family member identification
-- Priority levels for tasks (high/medium/low)
-- Medication compliance tracking with overdue alerts
-- Therapy session and appointment management
-- Easy-to-read daily overview
-- Print-friendly schedules
-- Mobile-responsive design for on-the-go access
+- Session-based authentication with a shared family password
+- AES-256-GCM encryption for Google OAuth tokens at rest
+- Per-request OAuth client instances (no credential leakage)
+- CSRF protection on OAuth flows
+- Timing-safe password comparison
+- Rate limiting on login attempts
+- CORS with configurable allowed origins
+- Input validation and field whitelisting on all endpoints
+- Global error handler (no stack trace leaks)
+
+### Accessibility
+
+- Focus trapping and ARIA attributes on modal dialogs (`role="dialog"`, `aria-modal`, `aria-labelledby`)
+- Keyboard navigation (Alt+D/F/M/A/T for tab switching, Escape to close modals)
+- Screen reader labels on all interactive elements
+
+## Architecture
+
+FamilyDash is a full-stack application:
+
+- **Frontend** — React 18 + Vite + Tailwind CSS (SPA)
+- **Backend** — Express 5 server with JSON file storage
+- **Data flow** — Frontend `useFamilyData` hook calls server API; all data persisted in `server/data.json`
+
+```
+FamilyDash/
+├── src/                        # React frontend
+│   ├── api/
+│   │   └── client.js           # Fetch wrapper with auth handling
+│   ├── components/
+│   │   ├── DashboardOverview.jsx
+│   │   ├── MedicationTracker.jsx
+│   │   ├── TaskManager.jsx
+│   │   └── AddItemForm.jsx     # Reusable modal form
+│   ├── hooks/
+│   │   ├── useFamilyData.js    # Server-backed data hook
+│   │   └── useFocusTrap.js     # Accessibility focus trap
+│   ├── pages/
+│   │   ├── FamilyPage.jsx
+│   │   └── AppointmentsPage.jsx
+│   ├── utils/
+│   │   ├── dateHelpers.js
+│   │   ├── dataValidation.js
+│   │   ├── memberHelpers.js
+│   │   └── priorityHelpers.js
+│   ├── App.jsx                 # Main app with auth gate
+│   └── main.jsx
+├── server/
+│   ├── index.js                # Express API server
+│   ├── index.test.js           # Server tests (Vitest + Supertest)
+│   ├── .env.example            # Required environment variables
+│   └── package.json
+├── package.json                # Frontend dependencies
+├── vite.config.js              # Vite config with API proxy
+└── tailwind.config.js
+```
 
 ## Quick Start
 
 ### Prerequisites
 
-- Node.js 16+ and npm
-- Modern web browser (Chrome, Firefox, Safari, Edge)
+- Node.js 18+
+- npm
 
-### Installation
+### 1. Install dependencies
 
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/family-dashboard.git
-cd family-dashboard
-```
-
-2. Install dependencies:
-```bash
+# Frontend
 npm install
+
+# Server
+cd server && npm install && cd ..
 ```
 
-3. Start the development server:
+### 2. Configure the server
+
 ```bash
+cp server/.env.example server/.env
+```
+
+Edit `server/.env` and set:
+
+- `APP_PASSWORD` — shared family login password
+- `TOKEN_ENCRYPTION_KEY` — generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+- Google OAuth credentials (optional, for Calendar integration)
+
+### 3. Start both servers
+
+```bash
+# Terminal 1: Start the API server
+cd server && node index.js
+
+# Terminal 2: Start the frontend dev server
 npm run dev
 ```
 
-4. Open your browser to `http://localhost:3000`
+The frontend dev server proxies `/api` and `/auth` requests to the Express server (port 3001).
 
-### Building for Production
+Open `http://localhost:5173` and log in with your `APP_PASSWORD`.
+
+## API Endpoints
+
+All `/api/*` routes require authentication (session cookie).
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/login` | Log in with family password |
+| POST | `/auth/logout` | Log out |
+| GET | `/auth/status` | Check auth state |
+| GET/POST/PUT/DELETE | `/api/family-members` | Family member CRUD |
+| GET/POST/PUT/DELETE | `/api/medications` | Medication CRUD |
+| GET/POST/PUT/DELETE | `/api/appointments` | Appointment CRUD |
+| GET/POST/PUT/DELETE | `/api/tasks` | Task CRUD |
+| GET | `/api/data/export` | Export all data |
+| POST | `/api/data/import` | Import data (validates and sanitizes) |
+| DELETE | `/api/data` | Clear all data |
+| GET | `/auth/google` | Start Google OAuth flow (requires auth) |
+| GET | `/auth/google/callback` | OAuth callback from Google |
+| GET | `/api/family-members/:id/calendar-events` | Fetch Google Calendar events |
+
+## Testing
 
 ```bash
-npm run build
+# Run all tests (frontend + server)
+npx vitest run
+
+# Frontend tests only
+npx vitest run --dir src
+
+# Server tests only
+cd server && npx vitest run
+
+# Watch mode
+npm run test:watch
 ```
 
-The built files will be in the `dist` directory.
+98 tests covering: data validation, date helpers, encryption round-trip and tamper detection, authentication, rate limiting, CORS, all CRUD endpoints, cascade deletes, bulk import/export, and field whitelisting.
 
-## Usage Guide
+## Keyboard Shortcuts
 
-### Getting Started
+| Shortcut | Action |
+|----------|--------|
+| `Alt + D` | Dashboard |
+| `Alt + F` | Family |
+| `Alt + M` | Medications |
+| `Alt + A` | Appointments |
+| `Alt + T` | Tasks |
+| `Escape` | Close modal |
 
-1. **Add Family Members**: Navigate to the "Family" tab and add each family member with a name and color theme
-2. **Schedule Medications**: Go to "Medications" to add daily medication schedules
-3. **Book Appointments**: Use the "Appointments" tab to track upcoming medical visits
-4. **Create Tasks**: Add daily tasks and therapy activities in the "Tasks" section
-5. **Monitor Dashboard**: Return to "Dashboard" for a complete daily overview
+## Environment Variables
 
-### Navigation
+See `server/.env.example` for all configuration options:
 
-- Use the top navigation bar to switch between sections
-- Keyboard shortcuts available:
-  - `Alt + D` - Dashboard
-  - `Alt + F` - Family
-  - `Alt + M` - Medications
-  - `Alt + A` - Appointments
-  - `Alt + T` - Tasks
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `APP_PASSWORD` | Yes | Family login password |
+| `TOKEN_ENCRYPTION_KEY` | Yes | 64-char hex key for token encryption |
+| `GOOGLE_CLIENT_ID` | For Calendar | Google OAuth client ID |
+| `GOOGLE_CLIENT_SECRET` | For Calendar | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | For Calendar | OAuth callback URL |
+| `FRONTEND_URL` | No | Frontend origin (default: `http://localhost:5173`) |
+| `CORS_ORIGINS` | No | Comma-separated allowed origins |
+| `NODE_ENV` | No | Set to `production` for Secure cookies |
 
-### Data Management
+## Technology Stack
 
-- **Export Data**: Settings > Export Data to download a backup JSON file
-- **Import Data**: Settings > Import Data to restore from a backup
-- **Clear All Data**: Settings > Clear All Data (use with caution)
-
-## Project Structure
-
-```
-family-dashboard/
-├── public/              # Static assets
-├── src/
-│   ├── components/      # React components
-│   │   ├── DashboardOverview.jsx
-│   │   ├── FamilyManager.jsx
-│   │   ├── MedicationTracker.jsx
-│   │   ├── AppointmentManager.jsx
-│   │   ├── TaskManager.jsx
-│   │   └── AddItemForm.jsx
-│   ├── hooks/          # Custom React hooks
-│   │   ├── useLocalStorage.js
-│   │   └── useFamilyData.js
-│   ├── utils/          # Utility functions
-│   │   ├── dateHelpers.js
-│   │   └── dataValidation.js
-│   ├── App.jsx         # Main app component
-│   ├── main.jsx        # App entry point
-│   └── index.css       # Global styles
-├── package.json        # Dependencies
-├── vite.config.js      # Vite configuration
-├── tailwind.config.js  # Tailwind configuration
-└── README.md          # This file
-```
-
-## Deployment
-
-### Deploy to Vercel
-
-1. Install Vercel CLI: `npm i -g vercel`
-2. Run `vercel` in the project directory
-3. Follow the prompts to deploy
-
-### Deploy to Netlify
-
-1. Build the project: `npm run build`
-2. Drag and drop the `dist` folder to Netlify
-3. Or use Netlify CLI: `netlify deploy --prod --dir=dist`
-
-### Deploy to GitHub Pages
-
-1. Install gh-pages: `npm install --save-dev gh-pages`
-2. Add to package.json:
-```json
-"homepage": "https://yourusername.github.io/family-dashboard",
-"scripts": {
-  "predeploy": "npm run build",
-  "deploy": "gh-pages -d dist"
-}
-```
-3. Run: `npm run deploy`
-
-## Development
-
-### Available Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
-- `npm run lint` - Run ESLint
-
-### Technology Stack
-
-- **React 18** - UI framework with hooks
-- **Vite** - Build tool and dev server
-- **Tailwind CSS** - Utility-first CSS framework
-- **Lucide React** - Icon library
-- **date-fns** - Date manipulation utilities
-- **localStorage** - Client-side data persistence
-
-### Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Use functional components with hooks
-- Follow React best practices
-- Keep components small and focused
-- Use meaningful variable and function names
-- Add comments for complex logic
-
-## Accessibility
-
-- ARIA labels for interactive elements
-- Keyboard navigation support
-- High contrast color schemes
-- Screen reader friendly
-- Responsive text sizing
-
-## Browser Support
-
-- Chrome (latest)
-- Firefox (latest)
-- Safari (latest)
-- Edge (latest)
-- Mobile browsers (iOS Safari, Chrome Android)
-
-## Troubleshooting
-
-### Common Issues
-
-**Data not saving**: Ensure localStorage is enabled in your browser
-
-**Import failing**: Check that the JSON file is valid and from this application
-
-**Performance issues**: Clear old data periodically, especially completed tasks
-
-**Print layout issues**: Use the browser's print preview to adjust settings
-
-### Getting Help
-
-- Check the [Issues](https://github.com/yourusername/family-dashboard/issues) page
-- Submit a bug report with browser and version information
-- Include console errors if any
-
-## Privacy & Security
-
-- All data is stored locally in your browser
-- No data is sent to external servers
-- No account or login required
-- Export your data regularly for backup
-- Use browser privacy mode for shared computers
-
-## Future Enhancements
-
-- [ ] PWA support for offline use
-- [ ] Dark mode theme
-- [ ] Multiple language support
-- [ ] Medication reminder notifications
-- [ ] Calendar integration
-- [ ] Data sync across devices
-- [ ] Customizable dashboard widgets
-- [ ] Medication history tracking
-- [ ] Report generation
+- **React 18** — UI with hooks
+- **Vite** — Build tool and dev server
+- **Tailwind CSS** — Utility-first styling
+- **Express 5** — API server
+- **Google APIs** — Calendar integration
+- **Node.js crypto** — AES-256-GCM token encryption
+- **Vitest** — Test framework
+- **Supertest** — HTTP assertion library
+- **Lucide React** — Icons
+- **date-fns** — Date utilities
 
 ## License
 
-This project is licensed under the MIT License - see below for details:
+MIT License. See the LICENSE section below.
 
 ```
 MIT License
@@ -260,14 +226,3 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-## Acknowledgments
-
-- Designed with families with special needs children in mind
-- Icons by [Lucide](https://lucide.dev/)
-- Built with [React](https://reactjs.org/) and [Tailwind CSS](https://tailwindcss.com/)
-- Date handling by [date-fns](https://date-fns.org/)
-
----
-
-Made with ❤️ for special families everywhere

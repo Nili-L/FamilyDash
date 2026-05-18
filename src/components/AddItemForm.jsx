@@ -1,17 +1,21 @@
-import React from 'react';
+import React, { useId } from 'react';
 import { X } from 'lucide-react';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
-const AddItemForm = ({ 
-  isOpen, 
-  onClose, 
-  onSubmit, 
-  title, 
-  fields, 
+const AddItemForm = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  title,
+  fields,
   submitText = 'Add',
   cancelText = 'Cancel'
 }) => {
+  const dialogRef = useFocusTrap(isOpen);
+  const titleId = useId();
+
   if (!isOpen) return null;
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
@@ -26,9 +30,15 @@ const AddItemForm = ({
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-slide-in">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto animate-slide-in"
+      >
         <div className="flex items-center justify-between p-4 border-b">
-          <h3 className="text-xl font-semibold">{title}</h3>
+          <h3 id={titleId} className="text-xl font-semibold">{title}</h3>
           <button
             onClick={onClose}
             className="p-1 hover:bg-gray-100 rounded-full transition-colors"
