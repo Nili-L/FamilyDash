@@ -1,4 +1,4 @@
-import { format, isToday, isTomorrow, isYesterday, parseISO, startOfDay, endOfDay, isBefore, isAfter } from 'date-fns';
+import { format, isToday, isTomorrow, isYesterday, parseISO, startOfDay, endOfDay, isBefore } from 'date-fns';
 
 export const formatDate = (date) => {
   const d = typeof date === 'string' ? parseISO(date) : date;

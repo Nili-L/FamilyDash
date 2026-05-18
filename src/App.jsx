@@ -64,10 +64,8 @@ function App() {
     medications,
     appointments,
     tasks,
-    settings,
-    
+
     addFamilyMember,
-    updateFamilyMember,
     deleteFamilyMember,
     
     addMedication,
@@ -83,8 +81,7 @@ function App() {
     updateTask,
     deleteTask,
     toggleTaskCompleted,
-    
-    updateSettings,
+
     exportData,
     importData,
     clearAllData,

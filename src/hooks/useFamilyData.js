@@ -83,7 +83,11 @@ export const useFamilyData = () => {
   const updateSettings = useCallback((value) => {
     const next = typeof value === 'function' ? value(settings) : value;
     setSettings(next);
-    try { localStorage.setItem('familyDashboard_settings', JSON.stringify(next)); } catch {}
+    try {
+      localStorage.setItem('familyDashboard_settings', JSON.stringify(next));
+    } catch (err) {
+      console.warn('Settings could not be persisted; using in-memory only.', err);
+    }
   }, [settings]);
 
   // ── Family Members ──────────────────────────────────────────────────

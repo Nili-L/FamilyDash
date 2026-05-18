@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Pill, Plus, Check, X, Clock, AlertCircle } from 'lucide-react';
+import { Pill, Plus, Check, Clock, AlertCircle } from 'lucide-react';
 import AddItemForm from './AddItemForm';
 import ConfirmDialog from './ConfirmDialog';
 import { formatTime, getCurrentDate, isOverdue } from '../utils/dateHelpers';

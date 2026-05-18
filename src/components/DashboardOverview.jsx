@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, Pill, CheckSquare, User, AlertCircle, Flag } from 'lucide-react';
-import { formatDate, formatTime, getCurrentDate, getCurrentTime, isOverdue, getDaysUntil } from '../utils/dateHelpers';
+import { Calendar, Pill, CheckSquare, User, Flag } from 'lucide-react';
+import { formatDate, formatTime, getCurrentDate, isOverdue, getDaysUntil } from '../utils/dateHelpers';
 import { getMemberById } from '../utils/memberHelpers';
 import { getPriorityClass } from '../utils/priorityHelpers';
 
@@ -67,10 +67,10 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
           <User className="w-20 h-20 text-gray-300 mx-auto mb-4" />
           <h2 className="text-2xl font-semibold text-gray-700 mb-2">Welcome to Family Dashboard!</h2>
           <p className="text-gray-500 mb-6 max-w-md mx-auto">
-            Start by adding your family members to unlock all features and begin managing your family's daily activities.
+            Start by adding your family members to unlock all features and begin managing your family&apos;s daily activities.
           </p>
           <p className="text-sm text-gray-400">
-            Navigate to the "Family" tab to add your first family member.
+            Navigate to the &quot;Family&quot; tab to add your first family member.
           </p>
         </div>
       </div>
@@ -118,7 +118,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Pill className="w-5 h-5 text-primary-600" />
-              <h3 className="font-medium">Today's Meds</h3>
+              <h3 className="font-medium">Today&apos;s Meds</h3>
             </div>
             <span className="text-2xl font-bold text-primary-600">{todaysMedications.length}</span>
           </div>
@@ -141,7 +141,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
             <span className="text-2xl font-bold text-primary-600">{todaysAppointments.length}</span>
           </div>
           <p className="text-sm text-gray-500">
-            Today's appointments
+            Today&apos;s appointments
           </p>
           <p className="text-sm text-gray-500">
             {upcomingAppointments.length} upcoming
@@ -220,7 +220,7 @@ const DashboardOverview = ({ familyMembers, medications, appointments, tasks }) 
         <div className="card p-6">
           <div className="flex items-center gap-2 mb-4">
             <Calendar className="w-5 h-5 text-primary-600" />
-            <h2 className="text-xl font-semibold">Today's Schedule</h2>
+            <h2 className="text-xl font-semibold">Today&apos;s Schedule</h2>
           </div>
           
           {todaysAppointments.length === 0 && upcomingAppointments.length === 0 ? (

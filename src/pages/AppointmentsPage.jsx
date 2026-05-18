@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ConfirmDialog from '../components/ConfirmDialog';
 
-const AppointmentsPage = ({ appointments, familyMembers, onAdd, onUpdate, onDelete }) => {
+const AppointmentsPage = ({ appointments, familyMembers, onAdd, onDelete }) => {
     const [showForm, setShowForm] = useState(false);
     const [formData, setFormData] = useState({ title: '', person: '', date: '', time: '', location: '', notes: '' });
     const [confirmDelete, setConfirmDelete] = useState(null);

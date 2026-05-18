@@ -161,7 +161,7 @@ describe('useFamilyData', () => {
       await act(async () => {
         try {
           await result.current.addFamilyMember({ name: 'Alice' });
-        } catch {}
+        } catch { /* expected rejection; asserted via error state below */ }
       });
 
       expect(result.current.error).toBe('Server error');
@@ -177,7 +177,7 @@ describe('useFamilyData', () => {
 
       // First call fails
       await act(async () => {
-        try { await result.current.addFamilyMember({ name: 'Alice' }); } catch {}
+        try { await result.current.addFamilyMember({ name: 'Alice' }); } catch { /* expected rejection */ }
       });
       expect(result.current.error).toBe('Server error');
 
