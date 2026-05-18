@@ -312,7 +312,7 @@ app.put('/api/family-members/:id', async (req, res) => {
   res.json({ id: m.id, name: m.name, color: m.color, googleConnected: !!m.tokens });
 });
 
-app.delete('/api/family-members/:id', async (req, res) => {
+app.delete('/api/family-members/:id', rateLimit, async (req, res) => {
   const { id } = req.params;
   const before = data.familyMembers.length;
   data.familyMembers = data.familyMembers.filter((m) => m.id !== id);
@@ -462,7 +462,7 @@ app.get('/api/data/export', (_req, res) => {
   });
 });
 
-app.post('/api/data/import', async (req, res) => {
+app.post('/api/data/import', rateLimit, async (req, res) => {
   const incoming = req.body;
 
   // Validate arrays
@@ -499,7 +499,7 @@ app.post('/api/data/import', async (req, res) => {
   res.json({ success: true, message: 'Data imported successfully' });
 });
 
-app.delete('/api/data', async (_req, res) => {
+app.delete('/api/data', rateLimit, async (_req, res) => {
   data = freshData();
   await saveData(data);
   res.status(204).send();

@@ -49,21 +49,23 @@ export const useFamilyData = () => {
   }, []);
 
   // ── Initial data fetch ──────────────────────────────────────────────
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (signal) => {
     try {
       setLoading(true);
       setError(null);
+      const opts = signal ? { signal } : undefined;
       const [members, meds, apts, tks] = await Promise.all([
-        familyMembersApi.getAll(),
-        medicationsApi.getAll(),
-        appointmentsApi.getAll(),
-        tasksApi.getAll(),
+        familyMembersApi.getAll(opts),
+        medicationsApi.getAll(opts),
+        appointmentsApi.getAll(opts),
+        tasksApi.getAll(opts),
       ]);
       setFamilyMembers(members);
       setMedications(meds);
       setAppointments(apts);
       setTasks(tks);
     } catch (err) {
+      if (err.name === 'AbortError') return; // unmounted, ignore
       setError(err.message);
       console.error('Failed to fetch data:', err);
     } finally {
@@ -71,7 +73,11 @@ export const useFamilyData = () => {
     }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchAll(controller.signal);
+    return () => controller.abort();
+  }, [fetchAll]);
 
   // ── Settings (stays in localStorage — purely UI preferences) ────────
   const updateSettings = useCallback((value) => {
